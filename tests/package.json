@@ -1,0 +1,10 @@
+{
+  "name": "tcp-notices-tests",
+  "private": true,
+  "scripts": {
+    "test": "node e2e.js && node sandbox.js && node excel.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
