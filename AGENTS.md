@@ -124,6 +124,18 @@ Built: the page saves to Redis, and a daily Vercel Cron job emails each reminder
 - The data is one shared set. Two people editing at once get a "choose which to keep" prompt rather than a merge.
 - Reminders go out once a day (about 08:00 UK, up to an hour late on Hobby). A same-day change made after the run is picked up the next day.
 
+## Next step agreed with the owner: rewrite in Next.js (not started)
+
+Decided on 2026-11-04. Build it on a new branch from `email-reminders`:
+
+- Next.js with React and **TypeScript**, deployed on Vercel (this replaces rule 1's "single file, no package.json" once the rewrite lands; update the rules then).
+- **All contracts and notices stored in Redis** (Upstash, through Vercel Storage). No browser-first copy. On first visit, offer to import any data the browser still holds under `deadlineCalendar.v2` (and the old `deadlineCalendar.items.v1`).
+- **One shared team password** (`APP_PASSWORD`), no user accounts.
+- Email through Resend (`RESEND_API_KEY` is already set in Vercel). Daily Vercel Cron with `CRON_SECRET`.
+- Keep the features, look and colours of the current page, and the reminder rules in `api/_lib.js` (`pickDue`, `cleanState`, sent-key format). Port `tests/api.js` and `tests/cloud-e2e.js` to the new app.
+- Environment variables the owner sets in Vercel: `KV_REST_API_URL` and `KV_REST_API_TOKEN` (added by the Upstash integration), `APP_PASSWORD`, `CRON_SECRET`, `RESEND_API_KEY`, and later `RESEND_FROM`.
+- The build needs registry.npmjs.org reachable. Check with `npm view next version` first.
+
 ## Working with the owner
 
 - Explain what you changed in plain language, with no jargon.
