@@ -10,11 +10,11 @@ type Ev = { cls: string; label: string; done?: boolean };
 function eventsOn(state: AppState, key: string): Ev[] {
   const out: Ev[] = [];
   state.contracts.forEach(function (c) {
-    if (c.delivery === key) out.push({ cls: 'leg', label: 'Delivery: ' + c.vessel });
-    if (c.redelivery === key) out.push({ cls: 'leg', label: 'Redelivery: ' + c.vessel });
+    if (c.delivery === key) out.push({ cls: 'leg', label: 'Delivery: ' + c.vessel + (c.deliveryTime ? ' ' + c.deliveryTime : '') });
+    if (c.redelivery === key) out.push({ cls: 'leg', label: 'Redelivery: ' + c.vessel + (c.redeliveryTime ? ' ' + c.redeliveryTime : '') });
   });
   state.notices.forEach(function (n) {
-    if (n.date === key) { const c = byId(state, n.cid); out.push({ cls: n.type, label: n.title + (c ? ' - ' + c.vessel : ''), done: n.done }); }
+    if (n.date === key) { const c = byId(state, n.cid); out.push({ cls: n.type, label: n.title + (n.time ? ' ' + n.time : '') + (c ? ' - ' + c.vessel : ''), done: n.done }); }
   });
   return out;
 }

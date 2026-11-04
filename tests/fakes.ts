@@ -1,9 +1,9 @@
-// Stand-ins for Upstash Redis and Resend, shared by api.test.ts and the test server.
+// Stand-ins for Upstash Redis and Brevo, shared by api.test.ts and the test server.
 // Replaces the global fetch, so nothing real is ever contacted.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const db: Record<string, any> = {};
 export const sentMails: { body: any; headers: Record<string, string> }[] = [];
-export const mode = { resend: 'ok' as 'ok' | 'fail' };
+export const mode = { brevo: 'ok' as 'ok' | 'fail' };
 
 function reply(status: number, obj: unknown) {
   return { ok: status < 400, status, json: async () => obj } as unknown as Response;
@@ -11,10 +11,10 @@ function reply(status: number, obj: unknown) {
 
 (globalThis as any).fetch = async function (url: string, opts: any) {
   const body = JSON.parse(opts.body);
-  if (String(url).indexOf('api.resend.com') >= 0) {
-    if (mode.resend === 'fail') return reply(403, { message: 'domain not verified' });
+  if (String(url).indexOf('api.brevo.com') >= 0) {
+    if (mode.brevo === 'fail') return reply(403, { code: 'permission_denied', message: 'sender not verified' });
     sentMails.push({ body: body, headers: opts.headers });
-    return reply(200, { id: 'mail_' + sentMails.length });
+    return reply(201, { messageId: '<mail_' + sentMails.length + '@brevo>' });
   }
   const c = body, cmd = String(c[0]).toUpperCase(); let result: any = null;
   if (cmd === 'GET') result = db[c[1]] === undefined ? null : db[c[1]];
@@ -32,7 +32,8 @@ function reply(status: number, obj: unknown) {
 export function setTestEnv(password: string) {
   process.env.KV_REST_API_URL = 'https://fake.upstash.io';
   process.env.KV_REST_API_TOKEN = 'tok';
-  process.env.RESEND_API_KEY = 're_fake';
+  process.env.BREVO_API_KEY = 'xkeysib-fake';
+  process.env.BREVO_FROM = 'TCP Notices <notices@example.com>';
   process.env.APP_PASSWORD = password;
   process.env.CRON_SECRET = 'cronsecret';
 }

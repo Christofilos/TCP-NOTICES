@@ -37,7 +37,7 @@ npm test          # server tests and browser tests (no real database or email ne
 npm run dev       # the app at http://localhost:3000 (needs the settings from SETUP.md in a .env.local file)
 ```
 
-The tests use stand-ins for the database and for Resend, so they need no settings and send no email.
+The tests use stand-ins for the database and for Brevo, so they need no settings and send no email.
 
 ## Files
 
@@ -49,13 +49,13 @@ The tests use stand-ins for the database and for Resend, so they need no setting
 | `tests/` | Automated tests |
 | `AGENTS.md` | Instructions for AI agents and new developers |
 | `CLAUDE.md` | Points Claude Code at `AGENTS.md` |
-| `SETUP.md` | Step-by-step: database, Resend, Vercel settings, checking it works |
+| `SETUP.md` | Step-by-step: database, Brevo, Vercel settings, checking it works |
 | `vercel.json` | The daily reminder job |
 
 ## Known limits
 
 - Reminder emails go out once a day, not at an exact time.
-- Resend only emails your own address until you verify a domain (see `SETUP.md`).
+- Emails are sent from one sender address verified in Brevo; free-mail addresses may land in spam (see `SETUP.md`).
 - One shared team password and one shared data set. There are no separate user accounts.
 - Editing a contract's delivery or redelivery date does not move notices that were already calculated from it.
 - Notice periods stop at 180 days.

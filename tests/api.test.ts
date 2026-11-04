@@ -1,4 +1,4 @@
-// Tests for the server code in lib/server. Real Redis and Resend are replaced by stand-ins,
+// Tests for the server code in lib/server. Real Redis and Brevo are replaced by stand-ins,
 // so this checks our logic only, not the live services.
 // Ported from the old tests/api.js; the handlers now take a web Request and return a Response.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -39,6 +39,9 @@ const PW = { 'x-app-password': 'correct horse' };
   check('keeps 3 reminders, valid emails only, clamps days', cs.notices[0].rems.length === 3 && cs.notices[0].rems[0].days === 7 && cs.notices[0].rems[0].to.length === 1 && cs.notices[0].rems[1].days === 0);
   const old = L.cleanState({ contracts: [], notices: [{ id: 'o1', cid: 'c0', title: 'Old', type: 'shipping', date: '2026-11-10', remind: 5 }, { id: 'o2', cid: 'c0', title: 'Older', type: 'contract', date: '2026-11-11', reminds: [10, 'x', 3] }] }) as any;
   check('keeps the older reminder fields (remind, reminds)', old.notices[0].remind === 5 && old.notices[1].reminds.join() === '10,3');
+  const timed = L.cleanState({ contracts: [{ id: 'c1', delivery: '2026-12-01', deliveryTime: '08:00', redeliveryTime: '25:61' }],
+    notices: [{ id: 't1', date: '2026-11-10', time: '14:30' }, { id: 't2', date: '2026-11-10', time: 'noon' }] }) as any;
+  check('keeps valid times, drops invalid ones', timed.contracts[0].deliveryTime === '08:00' && timed.contracts[0].redeliveryTime === undefined && timed.notices[0].time === '14:30' && timed.notices[1].time === undefined);
 
   console.log('pickDue');
   const st: any = { contracts: [{ id: 'c1', vessel: 'MV Test', party: 'Acme', ref: 'R1' }],
@@ -61,10 +64,12 @@ const PW = { 'x-app-password': 'correct horse' };
   const mail = L.buildEmail({ notice: { title: '<script>x</script>', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'MV\nTest', party: 'A&B', ref: '' }, rem: { days: 10 }, d: 10 });
   check('html escapes user text', mail.html.indexOf('<script>') < 0 && mail.html.indexOf('&lt;script&gt;') > 0 && mail.html.indexOf('A&amp;B') > 0);
   check('subject has no line breaks', mail.subject.indexOf('\n') < 0);
+  const timedMail = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', time: '14:30', type: 'shipping' }, contract: null, rem: { days: 10 }, d: 10 });
+  check('email shows the due time when set', /Due date: 14 Nov 2026 at 14:30/.test(timedMail.text) && !/ at /.test(mail.text.split('\n')[2]));
 
   console.log('endpoints: password');
   let r = await call(H.ping, {});
-  check('ping is public and shows no secrets', r.status === 200 && r.json.redis && r.json.resend && JSON.stringify(r.json).indexOf('re_fake') < 0 && JSON.stringify(r.json).indexOf('correct') < 0);
+  check('ping is public and shows no secrets', r.status === 200 && r.json.redis && r.json.brevo && r.json.sender && JSON.stringify(r.json).indexOf('xkeysib') < 0 && JSON.stringify(r.json).indexOf('example.com') < 0 && JSON.stringify(r.json).indexOf('correct') < 0);
   r = await call(H.getState, {});
   check('state without password is 401', r.status === 401);
   r = await call(H.getState, { headers: { 'x-app-password': 'wrong' } });
@@ -103,11 +108,11 @@ const PW = { 'x-app-password': 'correct horse' };
   r = await call(H.testEmail, { method: 'POST', body: { to: 'a@x.com' } });
   check('test email needs password', r.status === 401);
   r = await call(H.testEmail, { method: 'POST', headers: PW, body: { to: 'me@x.com' } });
-  check('test email sent through Resend', r.status === 200 && sentMails.length === 1 && sentMails[0].body.to[0] === 'me@x.com' && sentMails[0].headers.Authorization === 'Bearer re_fake');
-  fakes.mode.resend = 'fail';
+  check('test email sent through Brevo', r.status === 200 && sentMails.length === 1 && sentMails[0].body.to[0].email === 'me@x.com' && sentMails[0].headers['api-key'] === 'xkeysib-fake' && sentMails[0].body.sender.email === 'notices@example.com' && sentMails[0].body.sender.name === 'TCP Notices');
+  fakes.mode.brevo = 'fail';
   r = await call(H.testEmail, { method: 'POST', headers: PW, body: { to: 'me@x.com' } });
-  check('Resend refusal is reported with its reason', r.status === 502 && /domain/.test(r.json.detail));
-  fakes.mode.resend = 'ok';
+  check('Brevo refusal is reported with its reason', r.status === 502 && /sender/.test(r.json.detail));
+  fakes.mode.brevo = 'ok';
 
   console.log('endpoints: reminders');
   // make the data due relative to the real today so the endpoint's own clock matches
@@ -125,7 +130,7 @@ const PW = { 'x-app-password': 'correct horse' };
   check('cron refuses no secret', r.status === 401);
   r = await call(H.cron, { headers: { authorization: 'Bearer cronsecret' } });
   check('cron sends one email to both recipients', r.status === 200 && r.json.sent === 1 && sentMails.length === before + 1 && sentMails[before].body.to.length === 2);
-  check('send uses a duplicate-protection key', /n1:7:/.test(sentMails[before].headers['Idempotency-Key']));
+  check('sender comes from BREVO_FROM', sentMails[before].body.sender.email === 'notices@example.com');
   r = await call(H.cron, { headers: { authorization: 'Bearer cronsecret' } });
   check('running again sends nothing new', r.json.sent === 0 && sentMails.length === before + 1);
   r = await call(H.status, { headers: PW });
@@ -135,10 +140,10 @@ const PW = { 'x-app-password': 'correct horse' };
   const live2 = JSON.parse(JSON.stringify(live)); live2.notices[0].id = 'n2';
   const rev = (await call(H.getState, { headers: PW })).json.rev;
   await call(H.putState, { method: 'PUT', headers: PW, body: { state: live2, baseRev: rev } });
-  fakes.mode.resend = 'fail';
+  fakes.mode.brevo = 'fail';
   r = await call(H.cron, { headers: { authorization: 'Bearer cronsecret' } });
   check('failed send is counted, not marked as sent', r.json.failed === 1 && r.json.sent === 0);
-  fakes.mode.resend = 'ok';
+  fakes.mode.brevo = 'ok';
   r = await call(H.cron, { headers: { authorization: 'Bearer cronsecret' } });
   check('failed reminder is retried next run', r.json.sent === 1);
 

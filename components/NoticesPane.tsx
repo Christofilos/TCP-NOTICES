@@ -5,18 +5,19 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { AppState, Notice, NoticeType, Reminder } from '../lib/types';
 import {
-  DAY_CHOICES, MAIL_RE, PRESETS, byId, currentRem, dueFor, fmt, mailtoFor, outlookWebFor,
+  DAY_CHOICES, MAIL_RE, PRESETS, byId, currentRem, dueFor, fmtWhen, mailtoFor, outlookWebFor,
   remindsOf, sortedContracts, status, uid
 } from '../lib/rules';
 import { enterPresses, msgClass, runIfValid, type Msg } from './forms';
 
 type Fields = {
-  what: string; title: string; days: number[]; type: NoticeType; date: string;
+  what: string; title: string; days: number[]; type: NoticeType; date: string; time: string;
   r1: string; r2: string; r3: string; to1: string; to2: string; to3: string;
 };
 
 function defaults(date: string): Fields {
   return { what: 'Delivery notice', title: '', days: [PRESETS['Delivery notice'].days], type: 'shipping', date: date,
+    time: '',
     r1: '7', r2: '3', r3: '1', to1: '', to2: '', to3: '' };
 }
 function wholeNumbersOnly(e: KeyboardEvent<HTMLInputElement>) {
@@ -102,7 +103,7 @@ export default function NoticesPane(props: {
       return [n.rems ? '' : (days[i] === undefined ? '' : String(days[i])), ''];
     };
     const p1 = pair(0), p2 = pair(1), p3 = pair(2);
-    setF({ what: '', title: n.title, days: [], type: n.type, date: n.date, r1: p1[0], to1: p1[1], r2: p2[0], to2: p2[1], r3: p3[0], to3: p3[1] });
+    setF({ what: '', title: n.title, days: [], type: n.type, date: n.date, time: n.time || '', r1: p1[0], to1: p1[1], r2: p2[0], to2: p2[1], r3: p3[0], to3: p3[1] });
     setTimeout(function () { if (titleRef.current) titleRef.current.focus(); }, 0);
   }
 
@@ -130,26 +131,32 @@ export default function NoticesPane(props: {
       const id = editing;
       props.change(function (d) {
         const cur = d.notices.filter(function (x) { return x.id === id; })[0];
-        if (cur) { cur.cid = cid; cur.title = title; cur.type = f.type; cur.date = f.date; cur.rems = rems; delete cur.remind; delete cur.reminds; }
+        if (cur) { cur.cid = cid; cur.title = title; cur.type = f.type; cur.date = f.date; cur.rems = rems; delete cur.remind; delete cur.reminds;
+          if (f.time) cur.time = f.time; else delete cur.time;
+        }
       });
       setEditing(null); setF(defaults(props.selected)); setMsg({ text: 'Changes saved.', good: true });
       return;
     }
-    const toAdd: { title: string; date: string }[] = [];
+    const toAdd: { title: string; date: string; time: string }[] = [];
     if (preset) {
       const c = byId(state, cid);
       if (!c || !c[preset.anchor]) { setMsg({ text: 'This contract has no ' + preset.anchor + ' date, so these notices cannot be calculated.' }); return; }
       if (!ticked.length) { setMsg({ text: 'Tick at least one notice period.' }); return; }
-      ticked.forEach(function (k) { toAdd.push({ title: f.what + ' (' + k + (k === 1 ? ' day)' : ' days)'), date: dueFor(c, preset, k) }); });
+      ticked.forEach(function (k) {
+        toAdd.push({ title: f.what + ' (' + k + (k === 1 ? ' day)' : ' days)'), date: dueFor(c, preset, k), time: (preset.anchor === 'delivery' ? c.deliveryTime : c.redeliveryTime) || '' });
+      });
     } else {
-      toAdd.push({ title: f.what || f.title.trim(), date: f.date });
+      toAdd.push({ title: f.what || f.title.trim(), date: f.date, time: f.time });
     }
     let skipped = 0;
     const fresh: Notice[] = [];
     toAdd.forEach(function (t, i) {
       const dup = state.notices.some(function (x) { return x.cid === cid && x.title === t.title && x.date === t.date; });
       if (dup) { skipped++; return; }
-      fresh.push({ id: uid() + '-' + i, cid: cid, title: t.title, type: f.type, date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false });
+      const notice: Notice = { id: uid() + '-' + i, cid: cid, title: t.title, type: f.type, date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false };
+      if (t.time) notice.time = t.time;
+      fresh.push(notice);
     });
     if (fresh.length) props.change(function (d) { d.notices = d.notices.concat(fresh); });
     const added = fresh.length;
@@ -163,8 +170,8 @@ export default function NoticesPane(props: {
     const c = byId(state, cid);
     if (!c || !c[preset.anchor]) hint = 'This contract has no ' + preset.anchor + ' date, so these notices cannot be calculated.';
     else if (!ticked.length) hint = 'Tick at least one notice period.';
-    else hint = 'Will add ' + ticked.length + (ticked.length === 1 ? ' notice' : ' notices') + ', counted back from the ' + preset.anchor + ' date (' + fmt(c[preset.anchor]) + '): '
-      + ticked.map(function (k) { return k + (k === 1 ? ' day' : ' days') + ' = ' + fmt(dueFor(c, preset, k)); }).join('; ') + '.';
+    else hint = 'Will add ' + ticked.length + (ticked.length === 1 ? ' notice' : ' notices') + ', counted back from the ' + preset.anchor + ' date (' + fmtWhen(c[preset.anchor], preset.anchor === 'delivery' ? c.deliveryTime : c.redeliveryTime) + '): '
+      + ticked.map(function (k) { return k + (k === 1 ? ' day' : ' days') + ' = ' + fmtWhen(dueFor(c, preset, k)); }).join('; ') + '.';
   }
 
   const remRows: [keyof Fields, keyof Fields, string, string, boolean][] = [
@@ -225,6 +232,9 @@ export default function NoticesPane(props: {
               <input id="n-date" type="date" required={!preset} value={f.date} onChange={function (e) { set('date', e.target.value); }} />
             </label>
           </div>
+          <label id="n-time-wrap" hidden={!!preset}>Due time (optional)
+            <input id="n-time" type="time" value={f.time} onChange={function (e) { set('time', e.target.value); }} />
+          </label>
           <small className="hint" id="n-hint" hidden={!preset}>{hint}</small>
           {remRows.map(function (r, i) {
             return (
@@ -292,7 +302,7 @@ function NoticeItem(props: { n: Notice; state: AppState; change: (fn: (d: AppSta
         }} />
       <div>
         <strong>{n.title}</strong>
-        <small className="st">{fmt(n.date) + ' - ' + s.text}</small>
+        <small className="st">{fmtWhen(n.date, n.time) + ' - ' + s.text}</small>
         <small>{'Reminders: ' + remindsOf(n).join(', ') + ' days before' + (anyTo ? '' : ' (no recipients)')}</small>
         {cr && cr.to.length ? (
           <small>Email: <a href={outlookWebFor(props.state, n, cr)} target="_blank" rel="noopener noreferrer">Outlook web</a>

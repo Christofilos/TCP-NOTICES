@@ -30,7 +30,7 @@ export default function EmailPanel(props: { pw: string; flush: () => Promise<boo
     say('Sending test email...', true);
     call(api(props.pw, '/api/test-email', 'POST', { to: addr }), function (j) {
       if (j.httpStatus === 200) say('Test email sent to ' + addr + '. Check the inbox (and junk folder).', true);
-      else if (j.error === 'send-failed') say('Resend refused the email: ' + (j.detail || 'unknown reason'));
+      else if (j.error === 'send-failed') say('Brevo refused the email: ' + (j.detail || 'unknown reason'));
       else if (j.error === 'daily-test-limit') say('Daily limit of test emails reached.');
       else say(apiProblem(j));
     });

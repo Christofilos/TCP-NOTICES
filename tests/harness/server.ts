@@ -1,7 +1,7 @@
 /*
  * Local test server. Not used in production.
  * Serves the real React page (bundled with esbuild instead of Next.js) and runs the real
- * API handlers from lib/server against stand-in Redis and Resend (tests/fakes.ts).
+ * API handlers from lib/server against stand-in Redis and Brevo (tests/fakes.ts).
  * What this does NOT cover: Next.js's own build, routing and server rendering.
  */
 import http from 'http';

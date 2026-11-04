@@ -19,6 +19,7 @@ export const KEYS = {
 };
 export const LIMITS = { contracts: 500, notices: 5000, recipients: 20, perRun: 50, logKeep: 200, failMax: 10 };
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const MAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export function env(name: string): string {
@@ -134,6 +135,9 @@ export function cleanState(raw: any): AppState | null {
     seen[id] = true;
     contracts.push({ id: id, ref: str(c.ref, 40), vessel: str(c.vessel, 60), party: str(c.party, 60),
       delivery: DATE_RE.test(c.delivery) ? c.delivery : '', redelivery: DATE_RE.test(c.redelivery) ? c.redelivery : '' });
+    const added = contracts[contracts.length - 1];
+    if (TIME_RE.test(c.deliveryTime)) added.deliveryTime = c.deliveryTime;
+    if (TIME_RE.test(c.redeliveryTime)) added.redeliveryTime = c.redeliveryTime;
   });
   const seenN: Record<string, boolean> = {};
   const notices: Notice[] = [];
@@ -144,6 +148,7 @@ export function cleanState(raw: any): AppState | null {
     if (!id || seenN[id] || !DATE_RE.test(n.date)) return;
     seenN[id] = true;
     const out: Notice = { id: id, cid: str(n.cid, 60), title: str(n.title, 80), type: n.type === 'contract' ? 'contract' : 'shipping', date: n.date, done: !!n.done };
+    if (TIME_RE.test(n.time)) out.time = n.time;
     if (Array.isArray(n.rems)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       out.rems = n.rems.slice(0, 3).map(function (r: any): Reminder {
@@ -202,14 +207,14 @@ function esc(s: string): string {
 }
 function oneLine(s: string): string { return String(s).replace(/[\r\n]+/g, ' ').trim(); }
 
-export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'type'>; contract: Partial<Contract> | null; rem: { days: number }; d: number }) {
+export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'time' | 'type'>; contract: Partial<Contract> | null; rem: { days: number }; d: number }) {
   const n = it.notice, c = it.contract || {};
   const when = it.d === 0 ? 'due today' : it.d === 1 ? 'due tomorrow' : 'due in ' + it.d + ' days';
   const subject = oneLine('Reminder: ' + n.title + (c.vessel ? ' - ' + c.vessel : '') + ' (' + when + ')');
   const lines: [string, string][] = [
     ['Notice', n.title],
     ['Contract', c.vessel ? c.vessel + ' / ' + (c.party || '') + (c.ref ? ' (ref ' + c.ref + ')' : '') : 'Unknown contract'],
-    ['Due date', fmtDate(n.date) + ' (' + when + ')'],
+    ['Due date', fmtDate(n.date) + (n.time ? ' at ' + n.time : '') + ' (' + when + ')'],
     ['Type', n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation'],
     ['Reminder', it.rem.days + (it.rem.days === 1 ? ' day' : ' days') + ' before the due date']
   ];
@@ -223,27 +228,39 @@ export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'type'>
   return { subject: subject, text: text, html: html };
 }
 
-/* ---------- Resend ---------- */
+/* ---------- Brevo ---------- */
 
-export function fromAddress(): string { return env('RESEND_FROM') || 'TCP Notices <onboarding@resend.dev>'; }
+// BREVO_FROM is "Name <address>" or just "address". The address must be a verified sender in Brevo.
+export function senderOf(): { email: string; name?: string } | null {
+  const raw = env('BREVO_FROM');
+  const m = /^\s*(?:(.*?)\s*<([^<>\s]+)>|([^<>\s]+))\s*$/.exec(raw);
+  if (!m) return null;
+  const email = m[2] || m[3];
+  const name = (m[1] || '').replace(/^"|"$/g, '').slice(0, 70);
+  return name ? { email: email, name: name } : { email: email };
+}
 
 export interface SendResult { ok: boolean; id?: string; status?: number; error?: string }
 
-export async function sendResend(msg: { to: string[]; subject: string; text: string; html: string; idem?: string }): Promise<SendResult> {
-  const key = env('RESEND_API_KEY');
-  if (!key) return { ok: false, error: 'RESEND_API_KEY is not set in Vercel.' };
-  const headers: Record<string, string> = { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' };
-  if (msg.idem) headers['Idempotency-Key'] = String(msg.idem).slice(0, 250);
+export async function sendEmail(msg: { to: string[]; subject: string; text: string; html: string }): Promise<SendResult> {
+  const key = env('BREVO_API_KEY');
+  if (!key) return { ok: false, error: 'BREVO_API_KEY is not set in Vercel.' };
+  const sender = senderOf();
+  if (!sender) return { ok: false, error: 'BREVO_FROM is not set in Vercel (the sender address you verified in Brevo).' };
   let r: Response;
   try {
-    r = await fetch('https://api.resend.com/emails', {
-      method: 'POST', headers: headers,
-      body: JSON.stringify({ from: fromAddress(), to: msg.to, subject: msg.subject, text: msg.text, html: msg.html })
+    r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST', headers: { 'api-key': key, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        sender: sender,
+        to: msg.to.map(function (a) { return { email: a }; }),
+        subject: msg.subject, textContent: msg.text, htmlContent: msg.html
+      })
     });
-  } catch (e) { return { ok: false, error: 'Could not reach Resend: ' + (e as Error).message }; }
+  } catch (e) { return { ok: false, error: 'Could not reach Brevo: ' + (e as Error).message }; }
   const j = await r.json().catch(function () { return {}; });
-  if (!r.ok) return { ok: false, status: r.status, error: String((j && (j.message || (j.error && j.error.message))) || 'HTTP ' + r.status).slice(0, 300) };
-  return { ok: true, id: j && j.id };
+  if (!r.ok) return { ok: false, status: r.status, error: String((j && (j.message || j.code)) || 'HTTP ' + r.status).slice(0, 300) };
+  return { ok: true, id: j && j.messageId };
 }
 
 /* ---------- The reminder run (used by the daily job and the page's buttons) ---------- */
@@ -280,7 +297,7 @@ export async function runReminders(opts?: { dryRun?: boolean; now?: Date; pauseM
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       const mail = buildEmail(it);
-      const r = await sendResend({ to: it.rem.to, subject: mail.subject, text: mail.text, html: mail.html, idem: it.key });
+      const r = await sendEmail({ to: it.rem.to, subject: mail.subject, text: mail.text, html: mail.html });
       const entry: Record<string, unknown> = { t: new Date().toISOString(), title: it.notice.title, vessel: it.contract ? it.contract.vessel : '', date: it.notice.date, stage: it.rem.days, to: it.rem.to.length, ok: r.ok };
       if (r.ok) { result.sent++; entry.id = r.id; await redis(['HSET', KEYS.sent, it.key, entry.t as string]); }
       else { result.failed++; entry.error = r.error; }

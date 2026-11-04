@@ -1,5 +1,5 @@
 // The shape of the data. Shared by the page and the server.
-// Dates are always 'YYYY-MM-DD' strings.
+// Dates are always 'YYYY-MM-DD' strings. An optional time of day is a separate 'HH:MM' string.
 
 export type NoticeType = 'shipping' | 'contract';
 
@@ -15,6 +15,8 @@ export interface Contract {
   party: string;
   delivery: string;
   redelivery: string;
+  deliveryTime?: string;    // optional 'HH:MM', shown only
+  redeliveryTime?: string;  // optional 'HH:MM', shown only
 }
 
 export interface Notice {
@@ -23,6 +25,7 @@ export interface Notice {
   title: string;
   type: NoticeType;
   date: string;         // due date
+  time?: string;        // optional 'HH:MM', shown only
   done: boolean;
   rems?: Reminder[];    // up to 3, largest days first
   remind?: number;      // older notices only

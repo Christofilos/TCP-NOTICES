@@ -1,8 +1,8 @@
 # Setup
 
-Do these once. Everything happens in your Vercel and Resend dashboards. **Never paste a key or password into a chat, an email or a file in this project.** Type it only into the Vercel or Resend page.
+Do these once. Everything happens in your Vercel and Brevo dashboards. **Never paste a key or password into a chat, an email or a file in this project.** Type it only into the Vercel or Brevo page.
 
-If you already set up the old version (Redis, `APP_PASSWORD`, `CRON_SECRET`, `RESEND_API_KEY`), steps 1 and 2 are already done: the new version uses the same settings and the same saved data.
+If you already set up the old version (Redis, `APP_PASSWORD`, `CRON_SECRET`), steps 1 and 2 are mostly done: the new version uses the same settings and the same saved data. Only the email settings changed (Resend was replaced by Brevo).
 
 ## 1. Add the Redis database (Upstash) in Vercel
 
@@ -18,11 +18,12 @@ Project, **Settings**, **Environment Variables**. Add each one for all environme
 
 | Name | Value |
 |---|---|
-| `RESEND_API_KEY` | The API key from your Resend account (starts with `re_`) |
+| `BREVO_API_KEY` | An API key from Brevo (starts with `xkeysib-`). See step 5. |
+| `BREVO_FROM` | The sender address you verified in Brevo, for example `TCP Notices <you@gmail.com>` or just `you@gmail.com` |
 | `APP_PASSWORD` | A password you choose and share with your team. Make it long. |
 | `CRON_SECRET` | A long random text (30 or more letters and numbers). Nobody needs to remember it. |
 
-Optional, once you have a verified domain (step 5): `RESEND_FROM`, for example `TCP Notices <notices@yourcompany.com>`.
+The old `RESEND_API_KEY` and `RESEND_FROM` are no longer used. You can delete them.
 
 ## 3. Tell Vercel this is now a Next.js app
 
@@ -45,13 +46,17 @@ The rewrite is on the branch `nextjs-rewrite`. Vercel builds every branch you pu
 
 Previews share the same database as the live site, so changes you make on the preview are real.
 
-## 5. Verify a domain in Resend (needed to email other people)
+## 5. Set up Brevo (the email service)
 
-Until you do this, Resend only delivers to the email address you registered with. Test emails to yourself work, reminders to colleagues do not.
+Brevo has a free plan. You do not need a domain: you verify one sender address and can then email anyone.
 
-1. In Resend, open **Domains** and **Add Domain** (use a domain or subdomain your company owns).
-2. Resend shows DNS records. Add them where the domain is managed (your IT team can do this), then click **Verify**.
-3. Set `RESEND_FROM` in Vercel (step 2) to an address on that domain, and redeploy.
+1. Create a free account at brevo.com.
+2. Add and verify your sender address: **Senders, domains & dedicated IPs**, **Senders**, **Add a sender**. Brevo emails you a code or link to confirm it. Use the same address in `BREVO_FROM`.
+3. Create the API key: your name (top right), **SMTP & API**, **API keys**, **Generate a new API key**. Copy it straight into Vercel as `BREVO_API_KEY`.
+4. Check the free plan's daily sending limit and that it allows transactional email (the kind this app sends).
+5. Redeploy in Vercel so the new settings are used.
+
+If the sender is a free-mail address (Gmail, Outlook), some reminders may land in spam. Verifying a domain you own (in Brevo, **Domains**) fixes that, but is optional.
 
 ## 6. Check it works
 
@@ -59,14 +64,15 @@ Until you do this, Resend only delivers to the email address you registered with
 2. Add a contract. The line under the title should say *All changes saved*. Open the site on another device or browser: the contract is there.
 3. At the bottom, open **Email reminders**, type your own address and press **Send test email**. It should arrive within a minute.
 4. Press **Preview today's reminders** to see what would be emailed today. **Send due reminders now** sends them for real.
+   To test an email: add a notice with a due date a few days from today, put your own address in a reminder, and press **Send due reminders now**. A due time is optional and is shown in the app, calendar and email, but it does not change when reminders go out: they are decided by the date.
 5. The next morning (around 08:00 UK time) the daily job runs by itself. Press **Show sent emails** to see the result.
 
-If something fails, the page shows the reason (for example "Resend refused the email: domain not verified").
+If something fails, the page shows the reason (for example "Brevo refused the email: sender not valid").
 
 The daily job only runs on the live (production) deployment, not on previews.
 
 ## What was tested and what was not
 
-Tested automatically, with stand-ins for the database and Resend: reminder rules, the password and lock-out, data checking, saving, conflicts between devices, failed saves, importing old browser data, the email panel, retrying failed sends, and phone width.
+Tested automatically, with stand-ins for the database and Brevo: reminder rules, the password and lock-out, data checking, saving, conflicts between devices, failed saves, importing old browser data, the email panel, retrying failed sends, and phone width.
 
-Not tested, because they could not be reached from the environment where the rewrite was built: the Next.js build itself (`next build`), real Upstash, real Resend delivery, and Vercel's real daily trigger. Steps 4 and 6 above are the real checks.
+Not tested, because they could not be reached from the environment where the rewrite was built: the Next.js build itself (`next build`), real Upstash, real Brevo delivery, and Vercel's real daily trigger. Steps 4 and 6 above are the real checks.

@@ -1,6 +1,6 @@
 /*
  * Browser tests for the whole page, against the local test server (real React components,
- * real API handlers, stand-in Redis and Resend). Ported from the old e2e.js, excel.js and
+ * real API handlers, stand-in Redis and Brevo). Ported from the old e2e.js, excel.js and
  * cloud-e2e.js, plus checks for what is new: sign-in, saving straight to Redis, failed saves,
  * conflicts between devices, and importing the data the old page left in a browser.
  *
@@ -150,9 +150,11 @@ function plusDays(n: number) {
   ok('Outlook link goes to the reminder reached', /outlook\.office\.com.*to=c%40x\.com&subject=Reminder/.test(href || ''), (href || '').slice(0, 100));
 
   await A.selectOption('#n-what', '');
-  await A.fill('#n-title', 'Hire payment'); await A.fill('#n-date', '2026-12-01');
+  await A.fill('#n-title', 'Hire payment'); await A.fill('#n-date', '2026-12-01'); await A.fill('#n-time', '14:30');
   await A.click('#n-submit'); await saved(A);
   ok('custom notice saved', stored().state.notices.some((n: any) => n.title === 'Hire payment'));
+  ok('due time saved and shown', stored().state.notices.some((n: any) => n.title === 'Hire payment' && n.time === '14:30') && /at 14:30/.test(await A.locator('#nlist li').filter({ hasText: 'Hire payment' }).innerText()));
+  ok('notices without a time stay date-only', stored().state.notices.filter((n: any) => n.title !== 'Hire payment').every((n: any) => n.time === undefined));
 
   // calendar click fills the due date
   await A.click('#today');
@@ -168,10 +170,11 @@ function plusDays(n: number) {
   ok('edit mode label', (await text(A, '#n-sum')) === 'Edit notice');
   ok('cancel visible', await A.isVisible('#n-cancel'));
   ok('title prefilled', (await A.inputValue('#n-title')).length > 0);
-  await A.fill('#n-title', 'EDITED title'); await A.fill('#n-date', '2026-12-24');
+  ok('time prefilled', (await A.inputValue('#n-time')) === '14:30');
+  await A.fill('#n-title', 'EDITED title'); await A.fill('#n-date', '2026-12-24'); await A.fill('#n-time', '09:15');
   await A.click('#n-submit'); await saved(A);
   st = stored();
-  ok('notice edit applied', st.state.notices.some((n: any) => n.title === 'EDITED title' && n.date === '2026-12-24'));
+  ok('notice edit applied', st.state.notices.some((n: any) => n.title === 'EDITED title' && n.date === '2026-12-24' && n.time === '09:15'));
   ok('count unchanged after edit', st.state.notices.length === 6, 'n=' + st.state.notices.length);
   ok('form reset after edit', (await text(A, '#n-sum')) === 'Add a notice' && (await A.inputValue('#n-what')) === 'Delivery notice');
 
@@ -180,9 +183,11 @@ function plusDays(n: number) {
   await A.click('#list .ccard button:has-text("Edit contract")');
   ok('contract form prefilled', (await A.inputValue('#c-vessel')) === 'MV Aurora');
   await A.fill('#c-vessel', 'MV Borealis');
+  await A.fill('#c-del-time', '08:00'); await A.fill('#c-red-time', '17:30');
   await A.press('#c-vessel', 'Enter'); await saved(A);
   st = stored();
   ok('Enter saves the contract edit', st.state.contracts[0].vessel === 'MV Borealis' && st.state.contracts.length === 1);
+  ok('contract times saved and shown', st.state.contracts[0].deliveryTime === '08:00' && st.state.contracts[0].redeliveryTime === '17:30' && /at 08:00.*at 17:30/.test(await A.locator('#list .ccard').first().innerText()));
   ok('notices still linked', st.state.notices.every((n: any) => n.cid === st.state.contracts[0].id));
 
   // second contract, "Add notice" from its card
@@ -239,10 +244,10 @@ function plusDays(n: number) {
   ok('bad test address caught in page', /valid email/.test(await text(A, '#cl-msg')));
   await A.fill('#cl-to', 'me@x.com'); await A.click('#cl-test'); await A.waitForTimeout(400);
   ok('test email sent', /Test email sent/.test(await text(A, '#cl-msg')) && s.fakes.sentMails.length === 1, await text(A, '#cl-msg'));
-  s.fakes.mode.resend = 'fail';
+  s.fakes.mode.brevo = 'fail';
   await A.click('#cl-test'); await A.waitForTimeout(400);
-  ok('Resend refusal shown with reason', /Resend refused.*domain/.test(await text(A, '#cl-msg')), await text(A, '#cl-msg'));
-  s.fakes.mode.resend = 'ok';
+  ok('Brevo refusal shown with reason', /Brevo refused.*sender/.test(await text(A, '#cl-msg')), await text(A, '#cl-msg'));
+  s.fakes.mode.brevo = 'ok';
   await A.click('#cl-prev'); await A.waitForTimeout(500);
   ok('preview lists the due reminder', /1 reminder email/.test(await text(A, '#cl-msg')) && /Heel nomination/.test(await text(A, '#cl-out')), await text(A, '#cl-msg'));
   ok('preview sent nothing', s.fakes.sentMails.length === 1);

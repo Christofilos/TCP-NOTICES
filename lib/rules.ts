@@ -10,6 +10,11 @@ import type { AppState, Contract, Notice, Reminder } from './types';
 
 export const MAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+/* The time is only shown. Reminders are still decided by the date. */
+export function fmtWhen(date: string, time?: string): string {
+  return fmt(date) + (date && time ? ' at ' + time : '');
+}
+
 export function ymd(d: Date): string {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
@@ -77,7 +82,7 @@ export function dueFor(c: Contract, p: Preset, k: number): string {
 function mailText(state: AppState, n: Notice) {
   const c = byId(state, n.cid);
   const subj = 'Reminder: ' + n.title + (c ? ' - ' + c.vessel : '');
-  const body = n.title + (c ? ' for ' + c.vessel + ' (' + c.party + ')' : '') + ' is due on ' + fmt(n.date) + '. ' + status(n).text + '.';
+  const body = n.title + (c ? ' for ' + c.vessel + ' (' + c.party + ')' : '') + ' is due on ' + fmtWhen(n.date, n.time) + '. ' + status(n).text + '.';
   return { subj, body };
 }
 export function outlookWebFor(state: AppState, n: Notice, r: Reminder): string {

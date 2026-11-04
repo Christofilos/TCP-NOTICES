@@ -14,10 +14,10 @@ export async function ping(): Promise<Response> {
   return L.json(200, {
     ok: true,
     redis: !!L.redisConf(),
-    resend: !!L.env('RESEND_API_KEY'),
+    brevo: !!L.env('BREVO_API_KEY'),
     password: !!L.env('APP_PASSWORD'),
     cron: !!L.env('CRON_SECRET'),
-    sender: L.env('RESEND_FROM') ? 'custom' : 'resend-test-address'
+    sender: !!L.senderOf()
   });
 }
 
@@ -63,13 +63,13 @@ export async function status(req: Request): Promise<Response> {
       today: L.londonToday(),
       last: last ? JSON.parse(last) : null,
       log: ((log || []) as string[]).map(function (s) { try { return JSON.parse(s); } catch (e) { return null; } }).filter(Boolean),
-      resend: !!L.env('RESEND_API_KEY'),
-      sender: L.env('RESEND_FROM') ? 'custom' : 'resend-test-address'
+      brevo: !!L.env('BREVO_API_KEY'),
+      sender: !!L.senderOf()
     });
   } catch (e) { return serverError(e); }
 }
 
-// One test email so you can check Resend is connected. Needs the password. 20 a day at most.
+// One test email so you can check Brevo is connected. Needs the password. 20 a day at most.
 export async function testEmail(req: Request): Promise<Response> {
   const denied = await L.requireAuth(req); if (denied) return denied;
   const body = await L.readBody(req);
@@ -83,11 +83,11 @@ export async function testEmail(req: Request): Promise<Response> {
       if (n > 20) return L.json(429, { error: 'daily-test-limit' });
     } catch (e) { /* limiter is best effort */ }
   }
-  const r = await L.sendResend({
+  const r = await L.sendEmail({
     to: [to],
     subject: 'TCP Notices test email',
-    text: 'This is a test from TCP Notices. If you can read this, Resend is connected.',
-    html: '<p style="font-family:Arial,sans-serif">This is a test from <strong>TCP Notices</strong>. If you can read this, Resend is connected.</p>'
+    text: 'This is a test from TCP Notices. If you can read this, Brevo is connected.',
+    html: '<p style="font-family:Arial,sans-serif">This is a test from <strong>TCP Notices</strong>. If you can read this, Brevo is connected.</p>'
   });
   if (!r.ok) return L.json(502, { error: 'send-failed', detail: r.error, status: r.status || null });
   return L.json(200, { ok: true, id: r.id });
