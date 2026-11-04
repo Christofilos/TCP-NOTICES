@@ -2,7 +2,7 @@
 
 A calendar for tracking **shipping notices** and **contract obligations** on time charter party (TCP) contracts. Add each contract once (vessel, counterparty, delivery and redelivery dates), then add the notices that belong to it. The calendar shows everything, and anything due soon is flagged.
 
-It is a single static web page. There is no server, no build step and no account. Open `index.html` in a browser and it works.
+It is one web page (`index.html`) with no build step. On its own it works offline in any browser. With the optional server part (`api/`) it also saves to a Redis database and emails reminders on the right days. Setup steps are in [`SETUP.md`](SETUP.md).
 
 ## What it does
 
@@ -13,6 +13,7 @@ It is a single static web page. There is no server, no build step and no account
 - **Calendar.** Month view showing notices (teal for shipping, purple for contract obligations) and each contract's delivery and redelivery dates (grey).
 - **Alerts.** A red banner lists notices that are inside their reminder window or overdue. Optional desktop notifications work while the page is open.
 - **Email.** A notice that needs attention gets *Outlook web* and *Outlook app* links that open a ready-written email to the right recipient list. You press send.
+- **Cloud storage and email reminders (optional).** Connect with a team password and the data is saved online, shared across devices. A daily job emails each reminder to its recipient list through Resend. The panel at the bottom of the page can send a test email, preview today's reminders and show what was sent.
 - **Excel export.** One button downloads an `.xlsx` with a *Contracts* sheet and a *Notices by contract* sheet.
 
 The notice periods offered are placeholders chosen from general market practice. They are not taken from any real contract. Check them against your own charter parties.
@@ -25,7 +26,7 @@ The notice periods offered are placeholders chosen from general market practice.
 
 ## Where your data lives
 
-Everything you enter is stored in **your own browser** (`localStorage`). It is not sent anywhere.
+By default everything you enter is stored in **your own browser** (`localStorage`) and is not sent anywhere. If you connect cloud storage (see `SETUP.md`), it is also saved in your Redis database.
 
 - Each browser and each device has its own separate data.
 - Clearing site data, or using a private window, erases it.
@@ -44,7 +45,7 @@ npx playwright install chromium
 npm test
 ```
 
-`e2e.js` walks through the whole workflow. `sandbox.js` repeats the key steps inside a restricted frame (see `AGENTS.md` for why that matters). `excel.js` checks what is handed to the Excel export.
+`e2e.js` walks through the whole workflow. `sandbox.js` repeats the key steps inside a restricted frame (see `AGENTS.md` for why that matters). `excel.js` checks what is handed to the Excel export. `api.js` and `cloud-e2e.js` test the server part with stand-ins for Redis and Resend.
 
 ## Deploy to Vercel
 
@@ -57,11 +58,13 @@ The site is plain static files, so no build is needed.
 
 Every later push to `main` redeploys automatically.
 
-Note that the deployed site is public, but each visitor only ever sees their own browser's data.
+The deployed site address is public. Without cloud storage each visitor only sees their own browser's data. With it, the data is protected by the team password. For email reminders and Redis, follow `SETUP.md`.
 
 ## Known limits and next steps
 
-- **No automatic emails yet.** A web page cannot send email, or run when closed. Sending reminders by itself needs a server-side job and a shared data store. A plan using the Resend email service is described in `AGENTS.md`.
+- Reminder emails go out once a day, not at an exact time.
+- Resend only emails your own address until you verify a domain (see `SETUP.md`).
+- One shared team password and one shared data set. There are no separate user accounts.
 - Editing a contract's delivery or redelivery date does not move notices that were already calculated from it.
 - Notice periods stop at 180 days.
 
@@ -72,5 +75,7 @@ Note that the deployed site is public, but each visitor only ever sees their own
 | `index.html` | The whole app: markup, styles and script |
 | `AGENTS.md` | Instructions for AI agents and new developers |
 | `CLAUDE.md` | Points Claude Code at `AGENTS.md` |
-| `vercel.json` | Minimal Vercel settings |
+| `SETUP.md` | Step-by-step: Redis, Resend, Vercel settings, testing |
+| `api/` | Server functions: storage, password, test email, daily reminders |
+| `vercel.json` | Vercel settings: clean URLs, daily cron, time limits |
 | `tests/` | Browser tests (Playwright) |

@@ -36,6 +36,12 @@ h1{font-size:1.6rem;font-weight:800;margin:0 0 4px;letter-spacing:-.02em}
 label[hidden],small[hidden]{display:none}
 .hint{color:var(--muted);font-weight:400}
 .foot{margin-top:16px;display:grid;gap:6px;max-width:360px}
+.cloudbox{margin-top:16px;max-width:520px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--panel)}
+.cloudbox summary{cursor:pointer;font-weight:600}
+.cloudbox label{display:block;margin-top:8px;font-weight:600}
+.cloudbox input{width:100%;max-width:360px}
+.cloudbox .btns{margin-top:8px}
+.cloudbox ul{margin:8px 0 0;padding-left:18px;font-size:.88rem}
 .msg{color:var(--warn);font-weight:600;display:block}
 .msg:empty{display:none}
 .msg.good{color:var(--ship)}
@@ -215,6 +221,37 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
     <button class="ghost" id="xl">Download contracts and notices (Excel)</button>
     <small class="hint" id="xl-msg" role="status"></small>
   </div>
+  <details class="cloudbox" id="cloud">
+    <summary>Cloud storage and email reminders</summary>
+    <p class="hint" id="cl-intro">Saves your data online so every device sees the same list, and lets the server email reminders on the right days even when this page is closed. Works on the deployed website only.</p>
+    <div id="cl-login">
+      <label for="cl-pw">Team password</label>
+      <input id="cl-pw" type="password" autocomplete="off" placeholder="The APP_PASSWORD you set in Vercel">
+      <div class="btns actions"><button type="button" id="cl-go">Connect</button></div>
+    </div>
+    <div id="cl-tools" hidden>
+      <div class="btns actions">
+        <button type="button" class="ghost" id="cl-sync">Save to cloud now</button>
+        <button type="button" class="ghost" id="cl-off">Disconnect this device</button>
+      </div>
+      <label for="cl-to">Send a test email to</label>
+      <input id="cl-to" type="email" autocomplete="off" placeholder="you@company.com">
+      <div class="btns actions"><button type="button" class="ghost" id="cl-test">Send test email</button></div>
+      <div class="btns actions">
+        <button type="button" class="ghost" id="cl-prev">Preview today's reminders</button>
+        <button type="button" class="ghost" id="cl-run">Send due reminders now</button>
+        <button type="button" class="ghost" id="cl-stat">Show sent emails</button>
+      </div>
+      <div id="cl-out"></div>
+    </div>
+    <div id="cl-choice" hidden>
+      <div class="btns actions">
+        <button type="button" id="cl-usecloud">Use the cloud data</button>
+        <button type="button" class="ghost" id="cl-usehere">Use this device's data</button>
+      </div>
+    </div>
+    <small class="msg" id="cl-msg" role="status"></small>
+  </details>
 </div>
 <script>
 var KEY = 'deadlineCalendar.v2';
@@ -253,6 +290,7 @@ function save(){
   if(editingC && !byId(editingC)) endEdit();
   if(editingN && !state.notices.some(function(x){ return x.id===editingN; })) endEdit();
   render(); checkReminders(false);
+  cloudPush();
 }
 
 function remindsOf(n){
@@ -527,6 +565,159 @@ document.getElementById('notif').onclick = function(){
     });
   } catch(e){ btn.textContent = 'Alerts not available here'; }
 };
+
+/* ---------- Cloud storage and email reminders (needs the server in /api) ---------- */
+var CKEY = 'deadlineCalendar.cloud.v1';
+var cloud = {pw:'', rev:0, on:false, timer:null, quiet:false, pending:null};
+var savedCloud = read(CKEY, null);
+if(savedCloud && savedCloud.pw) cloud.pw = savedCloud.pw;
+
+function cmsg(t, good){ say('cl-msg', t, good); }
+function cshow(){
+  document.getElementById('cl-login').hidden = cloud.on;
+  document.getElementById('cl-tools').hidden = !cloud.on;
+}
+function api(path, method, body){
+  var opts = {method: method || 'GET', headers: {'x-app-password': cloud.pw}};
+  if(body){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  return fetch(path, opts).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){ j.httpStatus = r.status; return j; });
+  });
+}
+function apiProblem(j){
+  var e = j && j.error;
+  if(e==='wrong-password') return 'That password is not right.';
+  if(e==='too-many-attempts') return 'Too many wrong passwords. Wait 15 minutes and try again.';
+  if(e==='password-not-configured') return 'APP_PASSWORD has not been added in Vercel yet.';
+  if(e==='redis-not-configured') return 'The Redis database is not connected to this Vercel project yet.';
+  return 'The server answered with a problem' + (j && j.detail ? ': ' + j.detail : '.');
+}
+function cloudDown(){ cmsg('Cloud storage is not reachable from here. Open the deployed website to use it.'); }
+function isEmpty(s){ return !s || (!s.contracts.length && !s.notices.length); }
+function adopt(s){
+  state = s; cloud.quiet = true;
+  try { save(); } finally { cloud.quiet = false; }
+}
+function hideChoice(){ document.getElementById('cl-choice').hidden = true; cloud.pending = null; }
+
+function cloudConnect(silent){
+  if(!document.getElementById('cl-pw').value && !cloud.pw){ cmsg('Type the team password first.'); return; }
+  if(document.getElementById('cl-pw').value) cloud.pw = document.getElementById('cl-pw').value;
+  cmsg(silent ? '' : 'Connecting...', true);
+  api('/api/state').then(function(j){
+    if(j.httpStatus !== 200){
+      cloud.on = false; cshow();
+      if(!silent || j.error !== 'wrong-password') cmsg(apiProblem(j));
+      else { cloud.pw = ''; write(CKEY, {pw:''}); }
+      return;
+    }
+    cloud.on = true; cloud.rev = j.rev || 0;
+    write(CKEY, {pw: cloud.pw});
+    document.getElementById('cl-pw').value = '';
+    cshow(); document.getElementById('cloud').open = true;
+    if(!j.state){ cmsg('Connected. Saving this device\'s data to the cloud...', true); cloudPush(true); return; }
+    if(isEmpty(state)){ adopt(j.state); cmsg('Connected. Loaded the cloud data.', true); return; }
+    if(JSON.stringify(j.state) === JSON.stringify(state)){ cmsg('Connected. Cloud and this device match.', true); return; }
+    cloud.pending = j.state;
+    document.getElementById('cl-choice').hidden = false;
+    cmsg('This device and the cloud hold different data (cloud: ' + j.state.contracts.length + ' contracts, ' + j.state.notices.length + ' notices; here: ' + state.contracts.length + ' and ' + state.notices.length + '). Choose which to keep.');
+  }).catch(function(){ if(!silent) cloudDown(); });
+}
+
+function cloudPush(now){
+  if(!cloud.on || cloud.quiet || cloud.pending) return;
+  if(cloud.timer) clearTimeout(cloud.timer);
+  cloud.timer = setTimeout(cloudSendNow, now ? 0 : 800);
+}
+function cloudSendNow(force){
+  cloud.timer = null;
+  if(!cloud.on) return Promise.resolve(false);
+  return api('/api/state', 'PUT', {state: state, baseRev: cloud.rev, force: force === true}).then(function(j){
+    if(j.httpStatus === 200){ cloud.rev = j.rev; cmsg('Saved to cloud at ' + new Date().toLocaleTimeString() + '.', true); return true; }
+    if(j.httpStatus === 409){
+      return api('/api/state').then(function(c){
+        if(c.httpStatus === 200 && c.state){
+          cloud.pending = c.state; cloud.rev = c.rev;
+          document.getElementById('cl-choice').hidden = false;
+          cmsg('Another device saved newer data. Choose which to keep.');
+        }
+        return false;
+      });
+    }
+    cmsg(apiProblem(j)); return false;
+  }).catch(function(){ cmsg('Could not reach the cloud. Your data is still saved on this device.'); return false; });
+}
+function cloudFlush(){
+  if(cloud.timer){ clearTimeout(cloud.timer); return cloudSendNow(); }
+  return Promise.resolve(true);
+}
+
+function renderOut(items, emptyText){
+  var box = document.getElementById('cl-out'); box.textContent = '';
+  if(!items.length){ box.appendChild(el('p', 'hint', emptyText)); return; }
+  var ul = el('ul');
+  items.forEach(function(t){ ul.appendChild(el('li', '', t)); });
+  box.appendChild(ul);
+}
+function runLine(it){
+  return it.title + ' (' + (it.vessel || 'no vessel') + '), due ' + fmt(it.date) + ', ' + it.daysLeft + ' days left, ' + it.stage + '-day reminder to ' + it.to.join(', ');
+}
+function reminderRun(dry){
+  cmsg(dry ? 'Checking...' : 'Sending...', true);
+  cloudFlush().then(function(){
+    return api('/api/reminders', 'POST', {dryRun: dry});
+  }).then(function(j){
+    if(j.httpStatus !== 200){ cmsg(apiProblem(j)); return; }
+    if(j.note && !j.due.length){ cmsg(j.note); renderOut([], ''); return; }
+    if(dry){
+      cmsg(j.due.length + ' reminder email(s) would go out today (' + j.today + ').', true);
+      renderOut(j.due.map(runLine), 'Nothing is due for an email today.');
+    } else {
+      cmsg(j.sent + ' sent, ' + j.failed + ' failed.' + (j.failed ? ' Press Show sent emails for the reason.' : ''), !j.failed);
+      renderOut(j.due.map(runLine), 'Nothing was due for an email today.');
+    }
+  }).catch(cloudDown);
+}
+
+document.getElementById('cl-go').onclick = function(){ cloudConnect(false); };
+document.getElementById('cl-pw').onkeydown = function(e){ if(e.key === 'Enter'){ e.preventDefault(); cloudConnect(false); } };
+document.getElementById('cl-off').onclick = function(){
+  cloud.on = false; cloud.pw = ''; cloud.rev = 0; write(CKEY, {pw:''}); hideChoice(); cshow();
+  renderOut([], ''); cmsg('Disconnected. This device keeps its own copy of the data.', true);
+};
+document.getElementById('cl-sync').onclick = function(){ cmsg('Saving...', true); cloudSendNow(); };
+document.getElementById('cl-usecloud').onclick = function(){
+  if(!cloud.pending) return;
+  adopt(cloud.pending); hideChoice(); cmsg('Now using the cloud data.', true);
+};
+document.getElementById('cl-usehere').onclick = function(){
+  hideChoice(); cmsg('Saving this device\'s data to the cloud...', true); cloudSendNow(true);
+};
+document.getElementById('cl-test').onclick = function(){
+  var to = document.getElementById('cl-to').value.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)){ cmsg('Type a valid email address to send the test to.'); return; }
+  cmsg('Sending test email...', true);
+  api('/api/test-email', 'POST', {to: to}).then(function(j){
+    if(j.httpStatus === 200) cmsg('Test email sent to ' + to + '. Check the inbox (and junk folder).', true);
+    else if(j.error === 'send-failed') cmsg('Resend refused the email: ' + (j.detail || 'unknown reason'));
+    else if(j.error === 'daily-test-limit') cmsg('Daily limit of test emails reached.');
+    else cmsg(apiProblem(j));
+  }).catch(cloudDown);
+};
+document.getElementById('cl-prev').onclick = function(){ reminderRun(true); };
+document.getElementById('cl-run').onclick = function(){ reminderRun(false); };
+document.getElementById('cl-stat').onclick = function(){
+  api('/api/status').then(function(j){
+    if(j.httpStatus !== 200){ cmsg(apiProblem(j)); return; }
+    var last = j.last ? 'Last run ' + new Date(j.last.at).toLocaleString() + ': ' + j.last.result.sent + ' sent, ' + j.last.result.failed + ' failed.' : 'The reminder job has not run yet.';
+    cmsg(last, true);
+    renderOut(j.log.map(function(x){
+      return new Date(x.t).toLocaleString() + ' - ' + (x.ok ? 'sent' : 'FAILED (' + (x.error || 'unknown') + ')') + ': ' + x.title + ' (' + (x.vessel || 'no vessel') + '), ' + x.stage + '-day reminder, ' + x.to + ' recipient(s)';
+    }), 'No emails have been sent yet.');
+  }).catch(cloudDown);
+};
+cshow();
+if(cloud.pw && /^https?:$/.test(location.protocol)) cloudConnect(true);
 
 document.getElementById('n-date').value = selected;
 try { if('Notification' in window && Notification.permission==='granted') document.getElementById('notif').textContent = 'Desktop alerts are on'; } catch(e){}
