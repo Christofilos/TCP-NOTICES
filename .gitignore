@@ -1,4 +1,9 @@
-node_modules/
+node_modules
+.next/
+out/
 .vercel/
 .DS_Store
-tests/.wrap.html
+next-env.d.ts
+*.tsbuildinfo
+tests/.build/
+.env*.local
