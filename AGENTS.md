@@ -88,7 +88,7 @@ All in the `<script>` at the bottom of `index.html`.
 | `exportExcel` | Builds the workbook with SheetJS (loaded from cdnjs). |
 | `showTab` | Switches the Contracts and Notices tabs. |
 
-Look-and-feel decisions to keep: teal means shipping notice, purple means contract obligation, grey means delivery or redelivery. Notice lists are deliberately compact (name, date and status, one reminders line, email links only when due).
+Look-and-feel decisions to keep: teal means shipping notice, purple means contract obligation, grey means delivery or redelivery. Notice lists are deliberately compact (on/off switch, name, date and status, one reminders line, email links only when due). The switch is the notice's `done` flag shown the other way round: on means still to do, off means actioned. Switched-off notices get no alerts, banner entries, email links or reminder emails (`pickDue` skips `done`). The switch track uses a neutral colour, not teal or purple, because those mean notice types.
 
 ## Testing
 

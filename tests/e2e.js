@@ -115,7 +115,24 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
 
   // 11 delete notice, mark done
   await p.click('#tab-n');
-  await p.locator('#nlist input[type=checkbox]').first().check(); await p.waitForTimeout(200);
+  const sw = p.locator('#nlist input[role=switch]');
+  ok('every notice has an on/off switch', (await sw.count()) === 6);
+  ok('switches start on', await sw.first().isChecked() && /On/.test(await p.locator('#nlist .switch').first().textContent()));
+  const firstTitle = await p.locator('#nlist .item').first().locator('strong').textContent();
+  const banBefore = await p.evaluate(() => document.getElementById('banner').hidden ? 0 : document.getElementById('banner').textContent.length);
+  await p.locator('#nlist .switch').first().click(); await p.waitForTimeout(200);
+  st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
+  ok('switching off marks it actioned', st.notices.filter(n => n.done).length === 1);
+  const offItem = p.locator('#nlist .item.isdone');
+  ok('switched-off notice shows Off and Actioned', (await offItem.count()) === 1 && /Off/.test(await offItem.locator('.switch').textContent()) && /Actioned/.test(await offItem.textContent()), await offItem.textContent());
+  ok('switched-off notice moves to the end of its group', (await p.locator('#nlist .item').first().locator('strong').textContent()) !== firstTitle || (await p.locator('#nlist .item').first().getAttribute('class')).indexOf('isdone') < 0);
+  ok('switched-off notice has no email links', (await offItem.locator('a').count()) === 0);
+  const banAfter = await p.evaluate(() => document.getElementById('banner').hidden ? 0 : document.getElementById('banner').textContent.length);
+  ok('alert banner no longer lists it', banAfter <= banBefore);
+  await offItem.locator('input[role=switch]').focus(); await p.keyboard.press('Space'); await p.waitForTimeout(200);
+  st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
+  ok('switch works from the keyboard and turns back on', st.notices.every(n => !n.done));
+  await p.locator('#nlist .switch').first().click(); await p.waitForTimeout(200);
   st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
   ok('done saved', st.notices.some(n => n.done));
   await p.locator('#nlist .del').first().click(); await p.waitForTimeout(200);
