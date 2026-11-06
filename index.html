@@ -86,6 +86,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .dot{width:8px;height:8px;border-radius:50%}
 .dot.shipping{background:var(--ship)}.dot.contract{background:var(--con)}.dot.leg{background:var(--leg)}
 @media (max-width:520px){.cell{min-height:58px}.chip,.more{display:none}.dots{display:flex}}
+.calnote{margin:6px 0 0;font-size:.8rem}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.8rem;color:var(--muted)}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--c)}
 form{display:grid;gap:10px}
@@ -144,10 +145,10 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
       </div>
       <div class="grid" id="grid"></div>
       <div class="legend">
-        <span style="--c:var(--ship)">Shipping notice</span>
-        <span style="--c:var(--con)">Contract obligation</span>
-        <span style="--c:var(--leg)">Delivery / redelivery</span>
+        <span style="--c:var(--leg)">Delivery / redelivery date</span>
+        <span style="--c:var(--con)">Nomination</span>
       </div>
+      <p class="hint calnote">Notice deadlines and their reminders are listed on the Notices tab.</p>
     </section>
     <aside class="panel">
       <div class="tabs" role="tablist">
@@ -353,11 +354,13 @@ function eventsOn(key){
     if(c.delivery===key) out.push({cls:'leg', label:'Delivery: '+c.vessel});
     if(c.redelivery===key) out.push({cls:'leg', label:'Redelivery: '+c.vessel});
   });
+  // Only nominations go on the calendar. Notice deadlines and reminders stay on the Notices tab.
   state.notices.forEach(function(n){
-    if(n.date===key){ var c = byId(n.cid); out.push({cls:n.type, label:n.title+(c?' - '+c.vessel:''), done:n.done}); }
+    if(n.date===key && onCalendar(n)){ var c = byId(n.cid); out.push({cls:n.type, label:n.title+(c?' - '+c.vessel:''), done:n.done}); }
   });
   return out;
 }
+function onCalendar(n){ return /nomination/i.test(n.title || ''); }
 
 function renderCalendar(){
   var y = view.getFullYear(), m = view.getMonth();

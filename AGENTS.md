@@ -81,6 +81,7 @@ All in the `<script>` at the bottom of `index.html`.
 | `status(n)` | Returns `{soon, text}`. A notice is "soon" if overdue or due within its largest reminder window. |
 | `remindsOf`, `readRems`, `currentRem` | Reminder helpers. `currentRem` picks the reminder you have reached (smallest `days` that is at least the days remaining). |
 | `renderCalendar`, `renderSelect`, `renderList`, `renderNotices` | Drawing. `render()` calls all four. |
+| `eventsOn`, `onCalendar` | What the calendar shows: contract delivery and redelivery dates, plus notices whose title contains "nomination". Delivery and redelivery notices, other notices and reminders are deliberately left off the calendar (owner's request, 2026-11-06). |
 | `PRESETS`, `applyWhat`, `updateEstimate`, `tickedDays`, `dueFor` | The "What is due?" logic. Delivery and redelivery notices are counted back from a contract date. |
 | `wireForm`, `say` | Save-button wiring and on-page messages (see rules 4 and 5). |
 | `startEditContract`, `startEditNotice`, `endEdit` | Editing reuses the add forms. `editingC` and `editingN` hold the id being edited. |

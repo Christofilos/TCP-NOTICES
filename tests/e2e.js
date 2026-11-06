@@ -71,6 +71,13 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   // 6 calendar chip text
   const chipTexts = await p.locator('.cell .chip').allTextContents();
   ok('chips have text', chipTexts.length > 0, chipTexts.slice(0, 4).join(' | '));
+  ok('calendar shows the heel nomination', chipTexts.some(t => /^Heel nomination/.test(t)), chipTexts.join(' | '));
+  ok('calendar shows the delivery date', chipTexts.some(t => /^Delivery: MV Aurora/.test(t)));
+  ok('calendar does not show notice deadlines or reminders', !chipTexts.some(t => /notice \(\d+ days?\)/.test(t)), chipTexts.join(' | '));
+  const dec = await p.evaluate(() => ({ hire: eventsOn('2026-12-01').length, redel: eventsOn('2027-05-20').map(e => e.label), redelNotice: eventsOn('2027-04-20').length }));
+  ok('calendar does not show other notices', dec.hire === 0);
+  ok('calendar shows the redelivery date but not its notice', dec.redel.some(l => /^Redelivery: /.test(l)) && dec.redelNotice === 0, JSON.stringify(dec));
+  ok('notices are still all listed on the Notices tab', (await p.locator('#nlist .item').count()) === st.notices.length);
 
   // 7 edit notice
   await p.waitForTimeout(100);
