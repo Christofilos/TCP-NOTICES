@@ -55,6 +55,17 @@ label[hidden],small[hidden]{display:none}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .ccard{padding:10px 12px;display:grid;gap:2px}
 .ccard .actions{margin-top:8px}
+ul.lines{list-style:none;margin:8px 0 0;padding:0;border-top:1px solid var(--line)}
+.line{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:baseline;padding:5px 0 5px 9px;border-bottom:1px solid var(--line);border-left:3px solid var(--line);font-size:.85rem}
+.line.l-ship{border-left-color:var(--ship)}.line.l-con{border-left-color:var(--con)}
+.line .lname{grid-row:1/3;background:none;border:none;padding:0;text-align:left;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;overflow-wrap:anywhere}
+.line .lname:hover{text-decoration:underline}
+.line .ldate{white-space:nowrap;color:var(--muted);text-align:right}
+.line .lstat{white-space:nowrap;color:var(--muted);font-size:.78rem;text-align:right}
+.line.soon .lstat{color:var(--warn);font-weight:600}
+.line.isdone{border-left-color:var(--line)}
+.line.isdone .lname{text-decoration:line-through;opacity:.6}
+.line.isdone .ldate,.line.isdone .lstat{opacity:.7}
 .gl{font-size:.85rem;font-weight:600;display:block;margin-bottom:6px}
 .dd{border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .dd>summary{padding:8px;cursor:pointer;font-weight:400}
@@ -427,6 +438,22 @@ function renderList(){
     if(c.ref) card.appendChild(el('small',null,'Ref '+c.ref));
     card.appendChild(el('small',null,'Delivery '+fmt(c.delivery)+' to redelivery '+fmt(c.redelivery)));
     card.appendChild(el('small',attn?'alert':null, ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'')));
+    // Notices as line items under the contract (still to do first, then by due date)
+    if(ns.length){
+      var lines = el('ul','lines'); lines.setAttribute('aria-label','Notices for '+c.vessel);
+      ns.slice().sort(function(a,b){ return (a.done-b.done) || a.date.localeCompare(b.date); }).forEach(function(n){
+        var s = status(n);
+        var li = el('li','line '+(n.type==='shipping'?'l-ship':'l-con')+(n.done?' isdone':'')+(!n.done && s.soon?' soon':''));
+        var nm = el('button','lname',n.title); nm.type='button';
+        nm.title = 'Edit this notice'; nm.setAttribute('aria-label','Edit notice: '+n.title);
+        nm.onclick = function(){ startEditNotice(n); };
+        li.appendChild(nm);
+        li.appendChild(el('span','ldate',fmt(n.date)));
+        li.appendChild(el('span','lstat',n.done ? 'Off' : s.text));
+        lines.appendChild(li);
+      });
+      card.appendChild(lines);
+    }
     var act = el('div','actions');
     var add = el('button',null,'Add notice'); add.type='button';
     add.onclick = function(){

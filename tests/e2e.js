@@ -169,6 +169,27 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
   ok('delete notice', st.notices.length === 6);
 
+  // 11b notices as line items under each contract (Contracts tab)
+  await p.click('#tab-c'); await p.waitForTimeout(200);
+  const cards = await p.evaluate(() => Array.from(document.querySelectorAll('#list .ccard')).map(c => ({
+    name: c.querySelector('strong').textContent,
+    lines: Array.from(c.querySelectorAll('ul.lines li')).map(l => ({ t: l.querySelector('.lname').textContent, off: l.classList.contains('isdone'), d: l.querySelector('.ldate').textContent }))
+  })));
+  const perContract = await p.evaluate(() => state.contracts.map(c => ({ name: c.vessel + ' / ' + c.party, n: state.notices.filter(n => n.cid === c.id).length })));
+  ok('each contract lists its own notices as lines', perContract.every(pc => { const cd = cards.find(x => x.name === pc.name); return cd && cd.lines.length === pc.n; }), JSON.stringify(cards.map(c => c.name + ':' + c.lines.length)));
+  const aur = cards.find(c => c.lines.length);
+  ok('switched-off notices sit at the bottom and show as off', aur && aur.lines.some(l => l.off) && aur.lines.findIndex(l => l.off) >= aur.lines.filter(l => !l.off).length, JSON.stringify(aur && aur.lines.map(l => l.off)));
+  const openDates = await p.evaluate(() => { const c = state.contracts.find(x => state.notices.some(n => n.cid === x.id)); return state.notices.filter(n => n.cid === c.id && !n.done).map(n => n.date).sort(); });
+  const shownOpen = await p.evaluate(() => Array.from(document.querySelectorAll('#list .ccard')).find(c => c.querySelector('ul.lines')).querySelectorAll('ul.lines li:not(.isdone)').length);
+  ok('open notices listed in due-date order', shownOpen === openDates.length);
+  const lineBox = await p.evaluate(() => { const l = document.querySelector('#list li.line.l-con'); if(!l) return null; const cs = getComputedStyle(l); return { mb: cs.marginBottom, radius: cs.borderTopLeftRadius }; });
+  ok('contract-obligation lines look like the other lines', !lineBox || (lineBox.mb === '0px' && lineBox.radius === '0px'), JSON.stringify(lineBox));
+  const firstLine = p.locator('#list ul.lines .lname').first();
+  const firstName = await firstLine.textContent();
+  await firstLine.click(); await p.waitForTimeout(200);
+  ok('clicking a line opens that notice for editing', await p.isVisible('#pane-n') && (await p.textContent('#n-submit')) === 'Save changes', firstName);
+  await p.evaluate(() => endEdit()); await p.click('#tab-c'); await p.waitForTimeout(200);
+
   // 12 mobile width
   await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(200);
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);

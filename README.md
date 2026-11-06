@@ -6,7 +6,7 @@ It is one web page (`index.html`) with no build step. On its own it works offlin
 
 ## What it does
 
-- **Contracts tab.** Add a contract with vessel name, counterparty, optional contract reference, delivery date and redelivery date. Edit or delete it later.
+- **Contracts tab.** Add a contract with vessel name, counterparty, optional contract reference, delivery date and redelivery date. Edit or delete it later. Each contract lists its notices underneath as line items (name, due date, status), with open notices first in date order and switched-off ones at the bottom. Click a notice's name to edit it.
 - **Notices tab.** Notices are grouped by contract. Each notice has a name, a type (shipping notice or contract obligation), a due date, an on/off switch, and up to three reminders. Switch a notice off once you have actioned it: it stops alerting, drops out of the red banner and gets no more reminder emails. Switch it back on at any time.
 - **Standard notices.** *Delivery notice* and *Redelivery notice* work out their due date from the contract. Tick one or more notice periods (1 to 30 days, then 35, 40, 45, 50, 55, 60, 75, 90, 120, 150 and 180) and one notice is created per tick. *Heel nomination*, *Option period lifting* and *Other* take a date you type.
 - **Three reminders per notice.** Each reminder has its own number of days before the due date and its own list of email recipients.

@@ -81,6 +81,7 @@ All in the `<script>` at the bottom of `index.html`.
 | `status(n)` | Returns `{soon, text}`. A notice is "soon" if overdue or due within its largest reminder window. |
 | `remindsOf`, `readRems`, `currentRem` | Reminder helpers. `currentRem` picks the reminder you have reached (smallest `days` that is at least the days remaining). |
 | `renderCalendar`, `renderSelect`, `renderList`, `renderNotices` | Drawing. `render()` calls all four. |
+| `renderList` line items | Each contract card on the Contracts tab lists its notices as `li.line` rows (name button that opens `startEditNotice`, due date, status). Line colour classes are `l-ship` and `l-con`, not `shipping`/`contract`, because `.contract` already styles the grouped boxes on the Notices tab. |
 | `eventsOn`, `calKind` | What the calendar shows (owner's request, 2026-11-06): contract delivery and redelivery dates (grey, `leg`), delivery and redelivery notices (green, `dn`, title starts "Delivery notice" or "Redelivery notice"), nominations (blue, `hn`, title contains "nomination") and option liftings (orange, `ol`, title contains "option"). Other notices and reminder dates are deliberately left off the calendar. |
 | `PRESETS`, `applyWhat`, `updateEstimate`, `tickedDays`, `dueFor` | The "What is due?" logic. Delivery and redelivery notices are counted back from a contract date. |
 | `wireForm`, `say` | Save-button wiring and on-page messages (see rules 4 and 5). |
