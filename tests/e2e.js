@@ -71,12 +71,35 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   // 6 calendar chip text
   const chipTexts = await p.locator('.cell .chip').allTextContents();
   ok('chips have text', chipTexts.length > 0, chipTexts.slice(0, 4).join(' | '));
-  ok('calendar shows the heel nomination', chipTexts.some(t => /^Heel nomination/.test(t)), chipTexts.join(' | '));
-  ok('calendar shows the delivery date', chipTexts.some(t => /^Delivery: MV Aurora/.test(t)));
-  ok('calendar does not show notice deadlines or reminders', !chipTexts.some(t => /notice \(\d+ days?\)/.test(t)), chipTexts.join(' | '));
-  const dec = await p.evaluate(() => ({ hire: eventsOn('2026-12-01').length, redel: eventsOn('2027-05-20').map(e => e.label), redelNotice: eventsOn('2027-04-20').length }));
-  ok('calendar does not show other notices', dec.hire === 0);
-  ok('calendar shows the redelivery date but not its notice', dec.redel.some(l => /^Redelivery: /.test(l)) && dec.redelNotice === 0, JSON.stringify(dec));
+  // calendar colours: delivery/redelivery notices green (dn), heel nomination blue (hn), option lifting orange (ol)
+  const kinds = await p.evaluate(() => ({
+    del: eventsOn('2026-11-10').map(e => e.cls + '|' + e.label),
+    heel: eventsOn('2026-11-05').map(e => e.cls + '|' + e.label),
+    hire: eventsOn('2026-12-01').length,
+    redel: eventsOn('2027-05-20').map(e => e.cls + '|' + e.label),
+    redelNotice: eventsOn('2027-04-20').map(e => e.cls)
+  }));
+  ok('delivery notice on calendar in green', kinds.del.some(x => /^dn\|Delivery notice \(10 days\)/.test(x)), JSON.stringify(kinds.del));
+  ok('redelivery notice on calendar in green', kinds.redelNotice.indexOf('dn') >= 0, JSON.stringify(kinds.redelNotice));
+  ok('heel nomination on calendar in blue', kinds.heel.some(x => /^hn\|Heel nomination/.test(x)), JSON.stringify(kinds.heel));
+  ok('delivery and redelivery dates still grey', chipTexts.some(t => /^Delivery: MV Aurora/.test(t)) && kinds.redel.some(x => /^leg\|Redelivery: /.test(x)));
+  ok('other notices stay off the calendar', kinds.hire === 0);
+  ok('reminder dates are not on the calendar', (await p.evaluate(() => eventsOn('2026-10-29').length + eventsOn('2026-11-03').length)) === 0);
+  ok('legend lists the three colours', /Delivery \/ redelivery notice[\s\S]*Heel nomination[\s\S]*Option lifting/.test(await p.textContent('.legend')));
+
+  // option period lifting from the dropdown
+  await p.selectOption('#n-what', 'Option period lifting');
+  ok('option lifting asks for a date', await p.isVisible('#n-date') && !(await p.isVisible('#n-days-wrap')));
+  ok('option lifting defaults to contract obligation', (await p.inputValue('#n-type')) === 'contract');
+  await p.fill('#n-date', '2026-11-25'); await p.click('#n-submit'); await p.waitForTimeout(300);
+  st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
+  ok('option lifting saved', st.notices.some(n => n.title === 'Option period lifting' && n.date === '2026-11-25'));
+  const ol = await p.locator('.cell .chip.ol').allTextContents();
+  ok('option lifting on calendar in orange', ol.some(t => /^Option period lifting - MV Aurora/.test(t)), JSON.stringify(ol));
+  const olColour = await p.locator('.cell .chip.ol').first().evaluate(e => getComputedStyle(e).color);
+  const dnColour = await p.locator('.cell .chip.dn').first().evaluate(e => getComputedStyle(e).color);
+  const hnColour = await p.locator('.cell .chip.hn').first().evaluate(e => getComputedStyle(e).color);
+  ok('the three colours are different', olColour !== dnColour && dnColour !== hnColour && olColour !== hnColour, [dnColour, hnColour, olColour].join(' '));
   ok('notices are still all listed on the Notices tab', (await p.locator('#nlist .item').count()) === st.notices.length);
 
   // 7 edit notice
@@ -92,7 +115,7 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   await p.click('#n-submit'); await p.waitForTimeout(300);
   st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
   ok('notice edit applied', st.notices.some(n => n.title === 'EDITED title' && n.date === '2026-12-24'));
-  ok('count unchanged after edit', st.notices.length === 6, 'n=' + st.notices.length);
+  ok('count unchanged after edit', st.notices.length === 7, 'n=' + st.notices.length);
   ok('form reset after edit', (await p.textContent('#n-sum')) === 'Add a notice' && (await p.inputValue('#n-what')) === 'Delivery notice');
 
   // 8 edit contract
@@ -117,13 +140,13 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   // 10 reload persistence
   await p.reload(); await p.waitForTimeout(500);
   st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
-  ok('persisted after reload', st.notices.length === 6 && st.contracts.length === 2);
+  ok('persisted after reload', st.notices.length === 7 && st.contracts.length === 2);
   ok('contracts render after reload', (await p.locator('#list .ccard').count()) === 2);
 
   // 11 delete notice, mark done
   await p.click('#tab-n');
   const sw = p.locator('#nlist input[role=switch]');
-  ok('every notice has an on/off switch', (await sw.count()) === 6);
+  ok('every notice has an on/off switch', (await sw.count()) === 7);
   ok('switches start on', await sw.first().isChecked() && /On/.test(await p.locator('#nlist .switch').first().textContent()));
   const firstTitle = await p.locator('#nlist .item').first().locator('strong').textContent();
   const banBefore = await p.evaluate(() => document.getElementById('banner').hidden ? 0 : document.getElementById('banner').textContent.length);
@@ -144,7 +167,7 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   ok('done saved', st.notices.some(n => n.done));
   await p.locator('#nlist .del').first().click(); await p.waitForTimeout(200);
   st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
-  ok('delete notice', st.notices.length === 5);
+  ok('delete notice', st.notices.length === 6);
 
   // 12 mobile width
   await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(200);

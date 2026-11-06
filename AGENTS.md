@@ -4,7 +4,7 @@ Read this before changing anything. It tells you what the project is, how it is 
 
 ## Project in one paragraph
 
-TCP Notices is a single-file static web app (`index.html`) that tracks shipping notices and contract obligations on time charter party contracts. Contracts own notices. The calendar shows both. Data lives in the visitor's browser and, when they connect it, in a Redis database so a daily server job can email reminders. The owner is a complete beginner at coding, so explain changes in plain language, and never leave the app in a half-working state.
+TCP Notices is a single-file static web app (`index.html`) that tracks shipping notices and contract obligations on time charter party contracts. Contracts own notices. The calendar shows contract dates and the key notices. Data lives in the visitor's browser and, when they connect it, in a Redis database so a daily server job can email reminders. The owner is a complete beginner at coding, so explain changes in plain language, and never leave the app in a half-working state.
 
 ## Rules that must not be broken
 
@@ -81,7 +81,7 @@ All in the `<script>` at the bottom of `index.html`.
 | `status(n)` | Returns `{soon, text}`. A notice is "soon" if overdue or due within its largest reminder window. |
 | `remindsOf`, `readRems`, `currentRem` | Reminder helpers. `currentRem` picks the reminder you have reached (smallest `days` that is at least the days remaining). |
 | `renderCalendar`, `renderSelect`, `renderList`, `renderNotices` | Drawing. `render()` calls all four. |
-| `eventsOn`, `onCalendar` | What the calendar shows: contract delivery and redelivery dates, plus notices whose title contains "nomination". Delivery and redelivery notices, other notices and reminders are deliberately left off the calendar (owner's request, 2026-11-06). |
+| `eventsOn`, `calKind` | What the calendar shows (owner's request, 2026-11-06): contract delivery and redelivery dates (grey, `leg`), delivery and redelivery notices (green, `dn`, title starts "Delivery notice" or "Redelivery notice"), nominations (blue, `hn`, title contains "nomination") and option liftings (orange, `ol`, title contains "option"). Other notices and reminder dates are deliberately left off the calendar. |
 | `PRESETS`, `applyWhat`, `updateEstimate`, `tickedDays`, `dueFor` | The "What is due?" logic. Delivery and redelivery notices are counted back from a contract date. |
 | `wireForm`, `say` | Save-button wiring and on-page messages (see rules 4 and 5). |
 | `startEditContract`, `startEditNotice`, `endEdit` | Editing reuses the add forms. `editingC` and `editingN` hold the id being edited. |
@@ -89,7 +89,7 @@ All in the `<script>` at the bottom of `index.html`.
 | `exportExcel` | Builds the workbook with SheetJS (loaded from cdnjs). |
 | `showTab` | Switches the Contracts and Notices tabs. |
 
-Look-and-feel decisions to keep: teal means shipping notice, purple means contract obligation, grey means delivery or redelivery. Notice lists are deliberately compact (on/off switch, name, date and status, one reminders line, email links only when due). The switch is the notice's `done` flag shown the other way round: on means still to do, off means actioned. Switched-off notices get no alerts, banner entries, email links or reminder emails (`pickDue` skips `done`). The switch track uses a neutral colour, not teal or purple, because those mean notice types.
+Look-and-feel decisions to keep: in the notice lists, teal means shipping notice and purple means contract obligation. On the calendar, grey is a delivery or redelivery date, green a delivery or redelivery notice, blue a heel nomination and orange an option lifting. All four have light and dark tokens (`--leg`, `--dn`, `--hn`, `--ol` and their `-bg`) that must stay in sync. "What is due?" offers Delivery notice, Redelivery notice, Heel nomination, Option period lifting and Other. The last three take a typed date; option lifting is not calculated from the contract because its period is a contract term we must not invent (rule 8). Notice lists are deliberately compact (on/off switch, name, date and status, one reminders line, email links only when due). The switch is the notice's `done` flag shown the other way round: on means still to do, off means actioned. Switched-off notices get no alerts, banner entries, email links or reminder emails (`pickDue` skips `done`). The switch track uses a neutral colour, not teal or purple, because those mean notice types.
 
 ## Testing
 

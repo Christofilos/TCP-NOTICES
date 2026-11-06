@@ -14,6 +14,7 @@
   --bg:#EEF2F5; --panel:#FFFFFF; --ink:#18242F; --muted:#5C6B78; --line:#D3DCE3;
   --ship:#0E7C86; --ship-bg:#DCF1F2; --con:#7B3F9E; --con-bg:#EBDDF4;
   --leg:#3C4F5E; --leg-bg:#E1E7EC;
+  --dn:#1E7B34; --dn-bg:#DDF2E2; --hn:#1F5FBF; --hn-bg:#DFE9FA; --ol:#A04B06; --ol-bg:#FCE8D6;
   --warn:#B3261E; --warn-bg:#FBE3E0; --today:#18242F;
   color-scheme:light;
 }
@@ -22,6 +23,7 @@
     --bg:#0F1920; --panel:#17252F; --ink:#E7EEF3; --muted:#9AAAB6; --line:#2B3C48;
     --ship:#5FD0D9; --ship-bg:#12383C; --con:#CFA2EC; --con-bg:#332241;
     --leg:#B9C7D2; --leg-bg:#26363F;
+    --dn:#7FD993; --dn-bg:#173A22; --hn:#8FB7FF; --hn-bg:#1A2D4D; --ol:#FFB27A; --ol-bg:#4A2A12;
     --warn:#FF9A91; --warn-bg:#4A1F1C; --today:#E7EEF3; color-scheme:dark;
   }
 }
@@ -80,11 +82,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .chip.shipping{background:var(--ship-bg);color:var(--ship)}
 .chip.contract{background:var(--con-bg);color:var(--con)}
 .chip.leg{background:var(--leg-bg);color:var(--leg);font-weight:600}
+.chip.dn{background:var(--dn-bg);color:var(--dn)}
+.chip.hn{background:var(--hn-bg);color:var(--hn)}
+.chip.ol{background:var(--ol-bg);color:var(--ol)}
 .chip.done{text-decoration:line-through;opacity:.6}
 .more{font-size:.68rem;color:var(--muted)}
 .dots{display:none;gap:3px;flex-wrap:wrap}
 .dot{width:8px;height:8px;border-radius:50%}
-.dot.shipping{background:var(--ship)}.dot.contract{background:var(--con)}.dot.leg{background:var(--leg)}
+.dot.shipping{background:var(--ship)}.dot.contract{background:var(--con)}.dot.leg{background:var(--leg)}.dot.dn{background:var(--dn)}.dot.hn{background:var(--hn)}.dot.ol{background:var(--ol)}
 @media (max-width:520px){.cell{min-height:58px}.chip,.more{display:none}.dots{display:flex}}
 .calnote{margin:6px 0 0;font-size:.8rem}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.8rem;color:var(--muted)}
@@ -146,9 +151,11 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
       <div class="grid" id="grid"></div>
       <div class="legend">
         <span style="--c:var(--leg)">Delivery / redelivery date</span>
-        <span style="--c:var(--con)">Nomination</span>
+        <span style="--c:var(--dn)">Delivery / redelivery notice</span>
+        <span style="--c:var(--hn)">Heel nomination</span>
+        <span style="--c:var(--ol)">Option lifting</span>
       </div>
-      <p class="hint calnote">Notice deadlines and their reminders are listed on the Notices tab.</p>
+      <p class="hint calnote">Other notices and all reminders are listed on the Notices tab.</p>
     </section>
     <aside class="panel">
       <div class="tabs" role="tablist">
@@ -186,6 +193,7 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
               <option value="Delivery notice">Delivery notice</option>
               <option value="Redelivery notice">Redelivery notice</option>
               <option value="Heel nomination">Heel nomination</option>
+              <option value="Option period lifting">Option period lifting</option>
               <option value="">Other (type your own)</option>
             </select>
           </label>
@@ -354,13 +362,21 @@ function eventsOn(key){
     if(c.delivery===key) out.push({cls:'leg', label:'Delivery: '+c.vessel});
     if(c.redelivery===key) out.push({cls:'leg', label:'Redelivery: '+c.vessel});
   });
-  // Only nominations go on the calendar. Notice deadlines and reminders stay on the Notices tab.
+  // Calendar shows delivery/redelivery notices (green), nominations (blue) and option liftings (orange).
+  // Other notices and reminder dates stay on the Notices tab only.
   state.notices.forEach(function(n){
-    if(n.date===key && onCalendar(n)){ var c = byId(n.cid); out.push({cls:n.type, label:n.title+(c?' - '+c.vessel:''), done:n.done}); }
+    var k = calKind(n);
+    if(n.date===key && k){ var c = byId(n.cid); out.push({cls:k, label:n.title+(c?' - '+c.vessel:''), done:n.done}); }
   });
   return out;
 }
-function onCalendar(n){ return /nomination/i.test(n.title || ''); }
+function calKind(n){
+  var t = n.title || '';
+  if(/^(re)?delivery notice/i.test(t)) return 'dn';
+  if(/nomination/i.test(t)) return 'hn';
+  if(/option/i.test(t)) return 'ol';
+  return null;
+}
 
 function renderCalendar(){
   var y = view.getFullYear(), m = view.getMonth();
@@ -782,7 +798,7 @@ function applyWhat(){
   var p = PRESETS[what];
   document.getElementById('n-other-wrap').hidden = (what !== '');
   document.getElementById('n-title').required = (what === '');
-  if(what === 'Heel nomination') document.getElementById('n-type').value = 'contract';
+  if(what === 'Heel nomination' || what === 'Option period lifting') document.getElementById('n-type').value = 'contract';
   document.getElementById('n-days-wrap').hidden = !p;
   document.getElementById('n-date-wrap').hidden = !!p;
   document.getElementById('n-date').required = !p;
