@@ -100,6 +100,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .chip{font-size:.68rem;line-height:1.25;border-radius:4px;padding:2px 4px;white-space:normal;overflow-wrap:anywhere}
 .chip.shipping{background:var(--ship-bg);color:var(--ship)}
 .chip.contract{background:var(--con-bg);color:var(--con)}
+.chip[data-nid],.chip[data-cid]{cursor:pointer}
 .chip.leg{background:var(--leg-bg);color:var(--leg);font-weight:600}
 .chip.dn{background:var(--dn-bg);color:var(--dn)}
 .chip.hn{background:var(--hn-bg);color:var(--hn)}
@@ -378,14 +379,14 @@ function status(n){
 function eventsOn(key){
   var out = [];
   state.contracts.forEach(function(c){
-    if(c.delivery===key) out.push({cls:'leg', label:'Delivery: '+c.vessel});
-    if(c.redelivery===key) out.push({cls:'leg', label:'Redelivery: '+c.vessel});
+    if(c.delivery===key) out.push({cls:'leg', label:'Delivery: '+c.vessel, cid:c.id});
+    if(c.redelivery===key) out.push({cls:'leg', label:'Redelivery: '+c.vessel, cid:c.id});
   });
   // Calendar shows delivery/redelivery notices (green), nominations (blue) and option liftings (orange).
   // Other notices and reminder dates stay on the Notices tab only.
   state.notices.forEach(function(n){
     var k = calKind(n);
-    if(n.date===key && k){ var c = byId(n.cid); out.push({cls:k, label:n.title+(c?' - '+c.vessel:''), done:n.done}); }
+    if(n.date===key && k){ var c = byId(n.cid); out.push({cls:k, label:n.title+(c?' - '+c.vessel:''), done:n.done, nid:n.id}); }
   });
   return out;
 }
@@ -396,6 +397,15 @@ function calKind(n){
   if(/option/i.test(t)) return 'ol';
   return null;
 }
+
+// Double-click a calendar entry to open it: a notice opens in the notice form, a delivery/redelivery date opens its contract.
+document.getElementById('grid').addEventListener('dblclick', function(e){
+  var ch = e.target.closest ? e.target.closest('.chip') : null;
+  if(!ch) return;
+  var nid = ch.getAttribute('data-nid'), cid = ch.getAttribute('data-cid');
+  if(nid){ var n = state.notices.filter(function(x){ return x.id===nid; })[0]; if(n) startEditNotice(n); }
+  else if(cid){ var c = byId(cid); if(c) startEditContract(c); }
+});
 
 function renderCalendar(){
   var y = view.getFullYear(), m = view.getMonth();
@@ -411,11 +421,17 @@ function renderCalendar(){
     b.type = 'button';
     b.appendChild(el('span','n',String(d)));
     var evs = eventsOn(key);
-    evs.slice(0,4).forEach(function(e){ var ch = el('span','chip '+e.cls+(e.done?' done':''), e.label); ch.title = e.label; b.appendChild(ch); });
+    evs.slice(0,4).forEach(function(e){
+      var ch = el('span','chip '+e.cls+(e.done?' done':''), e.label);
+      ch.title = e.label+' (double-click to open)';
+      if(e.nid) ch.setAttribute('data-nid', e.nid);
+      if(e.cid) ch.setAttribute('data-cid', e.cid);
+      b.appendChild(ch);
+    });
     if(evs.length>4) b.appendChild(el('span','more','+'+(evs.length-4)+' more'));
     var dots = el('span','dots'); evs.forEach(function(e){ dots.appendChild(el('span','dot '+e.cls)); }); b.appendChild(dots);
     b.setAttribute('aria-label', key+(evs.length?': '+evs.map(function(e){return e.label;}).join('; '):''));
-    (function(k){ b.onclick = function(){ selected = k; document.getElementById('n-date').value = k; render(); }; })(key);
+    (function(k){ b.onclick = function(){ if(selected===k) return; selected = k; document.getElementById('n-date').value = k; render(); }; })(key);
     g.appendChild(b);
   }
 }

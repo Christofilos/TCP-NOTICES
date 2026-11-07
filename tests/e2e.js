@@ -87,6 +87,20 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   ok('reminder dates are not on the calendar', (await p.evaluate(() => eventsOn('2026-10-29').length + eventsOn('2026-11-03').length)) === 0);
   ok('legend lists the three colours', /Delivery \/ redelivery notice[\s\S]*Heel nomination[\s\S]*Option lifting/.test(await p.textContent('.legend')));
 
+  // double-click a calendar entry to open it
+  const nchip = p.locator('.cell .chip.dn[data-nid]').first();
+  const nchipId = await nchip.getAttribute('data-nid');
+  await nchip.click(); await p.waitForTimeout(150);
+  ok('single click on an entry does not open it', (await p.textContent('#n-submit')) !== 'Save changes');
+  await p.locator('.cell .chip.dn[data-nid]').first().dblclick(); await p.waitForTimeout(250);
+  const wantTitle = await p.evaluate(id => state.notices.find(n => n.id === id).title, nchipId);
+  ok('double-click on a notice opens it for editing', (await p.textContent('#n-submit')) === 'Save changes' && (await p.inputValue('#n-title')) === wantTitle && await p.isVisible('#pane-n'), wantTitle);
+  ok('the notice form is scrolled into view', await p.evaluate(() => { const r = document.getElementById('n-title').getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; }));
+  await p.evaluate(() => endEdit());
+  await p.locator('.cell .chip.leg[data-cid]').first().dblclick(); await p.waitForTimeout(250);
+  ok('double-click on a delivery date opens its contract', await p.isVisible('#pane-c') && (await p.inputValue('#c-vessel')) === 'MV Aurora' && /Save/.test(await p.textContent('#c-submit')), await p.textContent('#c-submit'));
+  await p.evaluate(() => endEdit()); await p.click('#tab-n'); await p.waitForTimeout(150);
+
   // option period lifting from the dropdown
   await p.selectOption('#n-what', 'Option period lifting');
   ok('option lifting asks for a date', await p.isVisible('#n-date') && !(await p.isVisible('#n-days-wrap')));
