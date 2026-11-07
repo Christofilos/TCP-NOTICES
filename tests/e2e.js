@@ -184,6 +184,18 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   ok('open notices listed in due-date order', shownOpen === openDates.length);
   const lineBox = await p.evaluate(() => { const l = document.querySelector('#list li.line.l-con'); if(!l) return null; const cs = getComputedStyle(l); return { mb: cs.marginBottom, radius: cs.borderTopLeftRadius }; });
   ok('contract-obligation lines look like the other lines', !lineBox || (lineBox.mb === '0px' && lineBox.radius === '0px'), JSON.stringify(lineBox));
+  // drop-down behaviour
+  const dd = p.locator('#list details.lineset').first();
+  ok('notice lists start closed', (await p.locator('#list details.lineset[open]').count()) === 0 && !(await p.locator('#list ul.lines .lname').first().isVisible()));
+  ok('drop-down shows the count and Show', /\d+ notices?/.test(await dd.locator('summary').textContent()) && /Show/.test(await dd.locator('summary').textContent()), await dd.locator('summary').textContent());
+  ok('contract without notices has no drop-down', (await p.locator('#list .ccard').filter({ hasNot: p.locator('details.lineset') }).count()) === (await p.evaluate(() => state.contracts.filter(c => !state.notices.some(n => n.cid === c.id)).length)));
+  await dd.locator('summary').click(); await p.waitForTimeout(150);
+  ok('clicking opens the list', await p.locator('#list ul.lines .lname').first().isVisible() && /Hide/.test(await dd.locator('summary').textContent()));
+  await p.evaluate(() => save()); await p.waitForTimeout(150);
+  ok('list stays open after the page redraws', await p.locator('#list details.lineset').first().evaluate(e => e.open));
+  await p.locator('#list details.lineset summary').first().focus(); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok('keyboard closes it', !(await p.locator('#list details.lineset').first().evaluate(e => e.open)));
+  await p.keyboard.press('Enter'); await p.waitForTimeout(150);
   const firstLine = p.locator('#list ul.lines .lname').first();
   const firstName = await firstLine.textContent();
   await firstLine.click(); await p.waitForTimeout(200);

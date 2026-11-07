@@ -55,7 +55,15 @@ label[hidden],small[hidden]{display:none}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .ccard{padding:10px 12px;display:grid;gap:2px}
 .ccard .actions{margin-top:8px}
-ul.lines{list-style:none;margin:8px 0 0;padding:0;border-top:1px solid var(--line)}
+.lineset{margin-top:2px}
+.lineset>summary{cursor:pointer;display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);list-style:none;padding:4px 0;border-radius:4px}
+.lineset>summary::-webkit-details-marker{display:none}
+.lineset>summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;flex:none}
+.lineset[open]>summary::before{transform:rotate(45deg)}
+.lineset>summary .ddhint{margin-left:auto;font-weight:600;color:var(--ink);font-size:.8rem}
+.lineset>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.lineset .alert{color:var(--warn);font-weight:600}
+ul.lines{list-style:none;margin:6px 0 0;padding:0;border-top:1px solid var(--line)}
 .line{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:baseline;padding:5px 0 5px 9px;border-bottom:1px solid var(--line);border-left:3px solid var(--line);font-size:.85rem}
 .line.l-ship{border-left-color:var(--ship)}.line.l-con{border-left-color:var(--con)}
 .line .lname{grid-row:1/3;background:none;border:none;padding:0;text-align:left;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;overflow-wrap:anywhere}
@@ -298,7 +306,7 @@ if(!state){
 }
 var view = new Date(); view.setDate(1);
 var selected = ymd(new Date());
-var closed = {}; var armed = null;
+var closed = {}; var armed = null; var linesOpen = {};
 var editingC = null, editingN = null;
 
 function read(k, fallback){ try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; } }
@@ -437,9 +445,16 @@ function renderList(){
     card.appendChild(el('strong',null,c.vessel+' / '+c.party));
     if(c.ref) card.appendChild(el('small',null,'Ref '+c.ref));
     card.appendChild(el('small',null,'Delivery '+fmt(c.delivery)+' to redelivery '+fmt(c.redelivery)));
-    card.appendChild(el('small',attn?'alert':null, ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'')));
-    // Notices as line items under the contract (still to do first, then by due date)
+    var countText = ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'');
+    if(!ns.length) card.appendChild(el('small',null,countText));
+    // Notices as line items in a drop-down under the contract (still to do first, then by due date)
     if(ns.length){
+      var dd = el('details','lineset'); dd.open = !!linesOpen[c.id];
+      dd.ontoggle = function(){ linesOpen[c.id] = dd.open; };
+      var sm = el('summary'); sm.appendChild(el('span',attn?'alert':null,countText));
+      sm.appendChild(el('span','ddhint',dd.open?'Hide':'Show'));
+      dd.addEventListener('toggle', function(){ sm.lastChild.textContent = dd.open ? 'Hide' : 'Show'; });
+      dd.appendChild(sm);
       var lines = el('ul','lines'); lines.setAttribute('aria-label','Notices for '+c.vessel);
       ns.slice().sort(function(a,b){ return (a.done-b.done) || a.date.localeCompare(b.date); }).forEach(function(n){
         var s = status(n);
@@ -452,7 +467,8 @@ function renderList(){
         li.appendChild(el('span','lstat',n.done ? 'Off' : s.text));
         lines.appendChild(li);
       });
-      card.appendChild(lines);
+      dd.appendChild(lines);
+      card.appendChild(dd);
     }
     var act = el('div','actions');
     var add = el('button',null,'Add notice'); add.type='button';
