@@ -216,6 +216,40 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   ok('clicking a line opens that notice for editing', await p.isVisible('#pane-n') && (await p.textContent('#n-submit')) === 'Save changes', firstName);
   await p.evaluate(() => endEdit()); await p.click('#tab-c'); await p.waitForTimeout(200);
 
+  // 11c archive a notice from the edit form, then restore and delete it on the Archive tab
+  await p.click('#tab-n'); await p.waitForTimeout(150);
+  ok('archive button hidden when not editing', !(await p.isVisible('#n-archive')));
+  const before = await p.evaluate(() => state.notices.filter(n => !n.archived).length);
+  const target = p.locator('#nlist .item').first();
+  const tTitle = await target.locator('strong').textContent();
+  const tId = await p.evaluate(t => state.notices.find(n => n.title === t).id, tTitle);
+  await target.locator('.editbtn').click(); await p.waitForTimeout(150);
+  ok('archive button shown when editing', await p.isVisible('#n-archive'));
+  await p.click('#n-archive'); await p.waitForTimeout(250);
+  st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
+  const archived = st.notices.find(n => n.id === tId);
+  ok('archiving saves the flag and the date', archived && archived.archived === true && /^\d{4}-\d{2}-\d{2}$/.test(archived.archivedAt), JSON.stringify(archived));
+  ok('archive message shown and edit form closed', /Archived/.test(await p.textContent('#n-msg')) && (await p.textContent('#n-submit')) === 'Add notice');
+  ok('archived notice leaves the Notices tab', (await p.locator('#nlist .item').count()) === before - 1);
+  ok('archived notice leaves the calendar', await p.evaluate(id => { const n = state.notices.find(x => x.id === id); return !eventsOn(n.date).some(e => e.nid === id); }, tId));
+  ok('archived notice is not in the alert banner', !(await p.evaluate(t => !document.getElementById('banner').hidden && Array.from(document.querySelectorAll('#banner li')).some(li => li.textContent.indexOf(t + ' -') === 0), tTitle)));
+  await p.click('#tab-c'); await p.waitForTimeout(150);
+  ok('contract card counts the archived notice', /\(1 archived\)/.test(await p.textContent('#list')));
+  ok('archive tab shows a count', (await p.textContent('#tab-a')).indexOf('(1)') >= 0, await p.textContent('#tab-a'));
+  await p.click('#tab-a'); await p.waitForTimeout(150);
+  ok('archive tab lists the notice', (await p.locator('#alist .aline').count()) === 1 && (await p.textContent('#alist')).indexOf(tTitle) >= 0);
+  await p.locator('#alist button', { hasText: 'Restore' }).click(); await p.waitForTimeout(200);
+  st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
+  ok('restore brings it back', !st.notices.find(n => n.id === tId).archived && (await p.locator('#alist .aline').count()) === 0 && /Restored/.test(await p.textContent('#a-msg')));
+  ok('restored notice is back on the Notices tab', await p.evaluate(() => document.querySelectorAll('#nlist .item').length) === before);
+  await p.evaluate(id => { const n = state.notices.find(x => x.id === id); n.archived = true; n.archivedAt = '2026-11-07'; save(); }, tId);
+  await p.locator('#alist button.danger').click(); await p.waitForTimeout(150);
+  ok('delete asks for a second click', /Click again/.test(await p.textContent('#alist button.danger')) && (await p.evaluate(id => state.notices.some(n => n.id === id), tId)));
+  await p.locator('#alist button.danger').click(); await p.waitForTimeout(200);
+  ok('second click deletes it for good', !(await p.evaluate(id => state.notices.some(n => n.id === id), tId)) && (await p.textContent('#tab-a')).indexOf('(') < 0);
+  ok('empty archive explains how to archive', /Archive notice/.test(await p.textContent('#alist')));
+  await p.click('#tab-c'); await p.waitForTimeout(150);
+
   // 12 mobile width
   await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(200);
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);

@@ -58,11 +58,15 @@ Stored as one JSON object in `localStorage` under the key `deadlineCalendar.v2`:
       type: 'shipping' | 'contract',
       date: 'YYYY-MM-DD',           // due date
       rems: [ { days: 7, to: ['a@x.com'] }, ... ],   // up to 3 reminders, largest days first
-      done: false
+      done: false,
+      archived: true,               // optional; only present when archived
+      archivedAt: 'YYYY-MM-DD'      // optional; the day it was archived
     }
   ]
 }
 ```
+
+Archived notices are kept in `notices` but treated as gone everywhere except the Archive tab: use `live(n)` to filter them out. `status(n)` returns `Archived` for them (so the Excel Status column says so), and the server's `pickDue` skips them. `cleanState` keeps `archived` and `archivedAt`.
 
 Other keys:
 
@@ -88,7 +92,8 @@ All in the `<script>` at the bottom of `index.html`.
 | `startEditContract`, `startEditNotice`, `endEdit` | Editing reuses the add forms. `editingC` and `editingN` hold the id being edited. |
 | `outlookWebFor`, `mailtoFor` | Build the email links. |
 | `exportExcel` | Builds the workbook with SheetJS (loaded from cdnjs). |
-| `showTab` | Switches the Contracts and Notices tabs. |
+| `showTab` | Switches the Contracts, Notices and Archive tabs (`c`, `n`, `a`). |
+| `live`, `renderArchive`, `n-archive` button | Archiving. The Archive notice button appears only while editing a notice. The Archive tab groups archived notices by contract with Restore and a two-click Delete (`armedA`). The tab label shows the count. |
 
 Look-and-feel decisions to keep: in the notice lists, teal means shipping notice and purple means contract obligation. On the calendar, grey is a delivery or redelivery date, green a delivery or redelivery notice, blue a heel nomination and orange an option lifting. All four have light and dark tokens (`--leg`, `--dn`, `--hn`, `--ol` and their `-bg`) that must stay in sync. "What is due?" offers Delivery notice, Redelivery notice, Heel nomination, Option period lifting and Other. The last three take a typed date; option lifting is not calculated from the contract because its period is a contract term we must not invent (rule 8). Notice lists are deliberately compact (on/off switch, name, date and status, one reminders line, email links only when due). The switch is the notice's `done` flag shown the other way round: on means still to do, off means actioned. Switched-off notices get no alerts, banner entries, email links or reminder emails (`pickDue` skips `done`). The switch track uses a neutral colour, not teal or purple, because those mean notice types.
 

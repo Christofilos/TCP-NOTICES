@@ -55,6 +55,13 @@ label[hidden],small[hidden]{display:none}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 .ccard{padding:10px 12px;display:grid;gap:2px}
 .ccard .actions{margin-top:8px}
+.agroup ul.lines{margin-top:6px}
+.aline{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.aline .ainfo{display:grid;gap:1px;min-width:0}
+.aline .ainfo .lname{font-weight:600;overflow-wrap:anywhere}
+.aline .btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.aline .btns button{padding:4px 10px;font-size:.8rem}
+#tab-a span{font-weight:400}
 .lineset{margin-top:2px}
 .lineset>summary{cursor:pointer;display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);list-style:none;padding:4px 0;border-radius:4px}
 .lineset>summary::-webkit-details-marker{display:none}
@@ -181,6 +188,7 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
       <div class="tabs" role="tablist">
         <button type="button" role="tab" id="tab-c" aria-selected="true" aria-controls="pane-c">Contracts</button>
         <button type="button" role="tab" id="tab-n" aria-selected="false" aria-controls="pane-n">Notices</button>
+        <button type="button" role="tab" id="tab-a" aria-selected="false" aria-controls="pane-a">Archive <span id="a-count"></span></button>
       </div>
       <div id="pane-c" role="tabpanel" aria-labelledby="tab-c">
       <details class="block" id="cdetails" open>
@@ -247,11 +255,17 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
           <small class="hint">Whole days before the due date. Separate several email addresses with commas. Leave a reminder empty if you don't need it.</small>
           <button class="primary" type="submit" id="n-submit">Add notice</button>
           <button class="ghost" type="button" id="n-cancel" hidden>Cancel editing</button>
+          <button class="ghost" type="button" id="n-archive" hidden>Archive notice</button>
           <small class="msg" id="n-msg" role="alert"></small>
         </form>
       </details>
       <h3>Your notices, by contract</h3>
       <div id="nlist"></div>
+      </div>
+      <div id="pane-a" role="tabpanel" aria-labelledby="tab-a" hidden>
+        <p class="hint">Archived notices are kept here. They are not shown on the calendar or in the lists, and get no alerts or reminder emails. Restore one to bring it back.</p>
+        <small class="msg" id="a-msg" role="status"></small>
+        <div id="alist"></div>
       </div>
       <button class="ghost" id="notif" style="margin-top:12px">Turn on desktop alerts</button>
     </aside>
@@ -367,7 +381,9 @@ function mailtoFor(n, r){
   var body = n.title+(c?' for '+c.vessel+' ('+c.party+')':'')+' is due on '+fmt(n.date)+'. '+status(n).text+'.';
   return 'mailto:'+r.to.join(',')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
+function live(n){ return !n.archived; }
 function status(n){
+  if(n.archived) return {soon:false, text:'Archived'};
   if(n.done) return {soon:false, text:'Actioned (switched off)'};
   var d = daysUntil(n.date);
   if(d < 0) return {soon:true, text:'Overdue by '+(-d)+(d===-1?' day':' days')};
@@ -386,7 +402,7 @@ function eventsOn(key){
   // Other notices and reminder dates stay on the Notices tab only.
   state.notices.forEach(function(n){
     var k = calKind(n);
-    if(n.date===key && k){ var c = byId(n.cid); out.push({cls:k, label:n.title+(c?' - '+c.vessel:''), done:n.done, nid:n.id}); }
+    if(n.date===key && k && live(n)){ var c = byId(n.cid); out.push({cls:k, label:n.title+(c?' - '+c.vessel:''), done:n.done, nid:n.id}); }
   });
   return out;
 }
@@ -455,13 +471,14 @@ function renderList(){
   var box = document.getElementById('list'); box.textContent = '';
   if(!state.contracts.length){ box.appendChild(el('p','empty','No contracts yet. Fill in the form above to add one.')); return; }
   sortedContracts().forEach(function(c){
-    var ns = state.notices.filter(function(n){ return n.cid===c.id; });
+    var ns = state.notices.filter(function(n){ return n.cid===c.id && live(n); });
+    var nArch = state.notices.filter(function(n){ return n.cid===c.id && !live(n); }).length;
     var attn = ns.filter(function(n){ return !n.done && status(n).soon; }).length;
     var card = el('div','contract ccard');
     card.appendChild(el('strong',null,c.vessel+' / '+c.party));
     if(c.ref) card.appendChild(el('small',null,'Ref '+c.ref));
     card.appendChild(el('small',null,'Delivery '+fmt(c.delivery)+' to redelivery '+fmt(c.redelivery)));
-    var countText = ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'');
+    var countText = ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'')+(nArch?' ('+nArch+' archived)':'');
     if(!ns.length) card.appendChild(el('small',null,countText));
     // Notices as line items in a drop-down under the contract (still to do first, then by due date)
     if(ns.length){
@@ -511,9 +528,9 @@ function renderList(){
 
 function renderNotices(){
   var box = document.getElementById('nlist'); box.textContent = '';
-  if(!state.notices.length){ box.appendChild(el('p','empty','No notices yet. Use the form above to add one.')); return; }
+  if(!state.notices.filter(live).length){ box.appendChild(el('p','empty', state.notices.length ? 'No active notices. Archived notices are on the Archive tab.' : 'No notices yet. Use the form above to add one.')); return; }
   sortedContracts().forEach(function(c){
-    var ns = state.notices.filter(function(n){ return n.cid===c.id; }).sort(function(a,b){ return (a.done-b.done) || a.date.localeCompare(b.date); });
+    var ns = state.notices.filter(function(n){ return n.cid===c.id && live(n); }).sort(function(a,b){ return (a.done-b.done) || a.date.localeCompare(b.date); });
     if(!ns.length) return;
     var attn = ns.filter(function(n){ return status(n).soon; }).length;
     var det = el('details','contract'); det.open = !closed[c.id];
@@ -562,7 +579,41 @@ function renderNotices(){
   });
 }
 
-function render(){ renderCalendar(); renderSelect(); renderList(); renderNotices(); }
+function render(){ renderCalendar(); renderSelect(); renderList(); renderNotices(); renderArchive(); }
+
+var armedA = null;
+function renderArchive(){
+  var arch = state.notices.filter(function(n){ return !live(n); });
+  document.getElementById('a-count').textContent = arch.length ? '('+arch.length+')' : '';
+  var box = document.getElementById('alist'); box.textContent = '';
+  if(!arch.length){ box.appendChild(el('p','empty','No archived notices. To archive one, open it with Edit and press Archive notice.')); return; }
+  sortedContracts().forEach(function(c){
+    var ns = arch.filter(function(n){ return n.cid===c.id; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
+    if(!ns.length) return;
+    var grp = el('div','contract ccard agroup');
+    grp.appendChild(el('strong',null,c.vessel+' / '+c.party));
+    var ul = el('ul','lines');
+    ns.forEach(function(n){
+      var li = el('li','line aline '+(n.type==='shipping'?'l-ship':'l-con'));
+      var info = el('div','ainfo');
+      info.appendChild(el('span','lname',n.title));
+      info.appendChild(el('small',null,'Due '+fmt(n.date)+(n.archivedAt?' · archived '+fmt(n.archivedAt):'')));
+      var bt = el('div','btns');
+      var rs = el('button',null,'Restore'); rs.type='button'; rs.setAttribute('aria-label','Restore '+n.title);
+      rs.onclick = function(){ delete n.archived; delete n.archivedAt; armedA = null; save(); say('a-msg', 'Restored "'+n.title+'". It is back on the Notices tab.', true); };
+      var dl = el('button','danger'+(armedA===n.id?' armed':''), armedA===n.id?'Click again to delete':'Delete'); dl.type='button';
+      dl.setAttribute('aria-label','Delete '+n.title+' for good');
+      dl.onclick = function(){
+        if(armedA!==n.id){ armedA = n.id; renderArchive(); return; }
+        state.notices = state.notices.filter(function(x){ return x.id!==n.id; }); armedA = null; save();
+        say('a-msg', 'Deleted for good.', true);
+      };
+      bt.appendChild(rs); bt.appendChild(dl);
+      li.appendChild(info); li.appendChild(bt); ul.appendChild(li);
+    });
+    grp.appendChild(ul); box.appendChild(grp);
+  });
+}
 
 function checkReminders(notify){
   var due = state.notices.filter(function(n){ return !n.done && status(n).soon; });
@@ -638,7 +689,7 @@ document.getElementById('nform').onsubmit = function(e){
   }
   var skipped = 0;
   toAdd.forEach(function(t, i){
-    var dup = state.notices.some(function(x){ return x.cid===cid && x.title===t.title && x.date===t.date; });
+    var dup = state.notices.some(function(x){ return live(x) && x.cid===cid && x.title===t.title && x.date===t.date; });
     if(dup){ skipped++; return; }
     state.notices.push({id: uid()+'-'+i, cid: cid, title: t.title, type: type, date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false});
   });
@@ -955,6 +1006,7 @@ function endEdit(){
   document.getElementById('n-sum').textContent = 'Add a notice';
   document.getElementById('n-submit').textContent = 'Add notice';
   document.getElementById('n-cancel').hidden = true;
+  document.getElementById('n-archive').hidden = true;
   document.getElementById('n-what-wrap').hidden = false;
   document.getElementById('n-what').value = 'Delivery notice';
   document.getElementById('n-title').value = '';
@@ -988,6 +1040,7 @@ function startEditNotice(n){
   document.getElementById('n-sum').textContent = 'Edit notice';
   document.getElementById('n-submit').textContent = 'Save changes';
   document.getElementById('n-cancel').hidden = false;
+  document.getElementById('n-archive').hidden = false;
   document.getElementById('n-what-wrap').hidden = true;
   document.getElementById('n-contract').value = n.cid;
   document.getElementById('n-what').value = '';
@@ -1007,14 +1060,21 @@ document.getElementById('c-cancel').onclick = endEdit;
 document.getElementById('n-cancel').onclick = endEdit;
 
 function showTab(which){
-  var c = (which === 'c');
-  document.getElementById('pane-c').hidden = !c;
-  document.getElementById('pane-n').hidden = c;
-  document.getElementById('tab-c').setAttribute('aria-selected', c ? 'true' : 'false');
-  document.getElementById('tab-n').setAttribute('aria-selected', c ? 'false' : 'true');
+  ['c','n','a'].forEach(function(t){
+    document.getElementById('pane-'+t).hidden = (t !== which);
+    document.getElementById('tab-'+t).setAttribute('aria-selected', t === which ? 'true' : 'false');
+  });
 }
 document.getElementById('tab-c').onclick = function(){ showTab('c'); };
 document.getElementById('tab-n').onclick = function(){ showTab('n'); };
+document.getElementById('tab-a').onclick = function(){ armedA = null; renderArchive(); showTab('a'); };
+document.getElementById('n-archive').onclick = function(){
+  var n = state.notices.filter(function(x){ return x.id===editingN; })[0];
+  if(!n) return;
+  n.archived = true; n.archivedAt = ymd(new Date());
+  endEdit(); save();
+  say('n-msg', 'Archived "'+n.title+'". You can find it on the Archive tab.', true);
+};
 applyWhat();
 </script>
 </body>

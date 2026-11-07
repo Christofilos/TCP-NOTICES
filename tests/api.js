@@ -58,6 +58,11 @@ const PW = { 'x-app-password': 'correct horse' };
   check('later stage is sent again after earlier one', L.pickDue(st, '2026-11-11', { 'a:10:2026-11-14': 'x' }).filter(function (x) { return x.notice.id === 'a'; })[0].rem.days === 3);
   check('changed due date counts as new', L.pickDue(st, '2026-11-04', { 'a:10:2026-11-13': 'x' }).length === 2);
 
+  const archSt = JSON.parse(JSON.stringify(st)); archSt.notices[0].archived = true;
+  check('archived notices are never emailed', L.pickDue(archSt, '2026-11-04', {}).map(function (x) { return x.notice.id; }).join() === 'f');
+  const keptArch = L.cleanState({ contracts: [], notices: [{ id: 'z', date: '2026-11-10', archived: true, archivedAt: '2026-11-07' }, { id: 'y', date: '2026-11-10', archived: 'yes', archivedAt: 'junk' }] });
+  check('archive flag and date survive saving, junk does not', keptArch.notices[0].archived === true && keptArch.notices[0].archivedAt === '2026-11-07' && keptArch.notices[1].archived === undefined);
+
   console.log('email text');
   const mail = L.buildEmail({ notice: { title: '<script>x</script>', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'MV\nTest', party: 'A&B', ref: '' }, rem: { days: 10 }, d: 10 });
   check('html escapes user text', mail.html.indexOf('<script>') < 0 && mail.html.indexOf('&lt;script&gt;') > 0 && mail.html.indexOf('A&amp;B') > 0);

@@ -133,6 +133,7 @@ function cleanState(raw) {
     if (!id || seenN[id] || !DATE_RE.test(n.date)) return;
     seenN[id] = true;
     const out = { id: id, cid: str(n.cid, 60), title: str(n.title, 80), type: n.type === 'contract' ? 'contract' : 'shipping', date: n.date, done: !!n.done };
+    if (n.archived === true) { out.archived = true; if (DATE_RE.test(n.archivedAt)) out.archivedAt = n.archivedAt; }
     if (Array.isArray(n.rems)) {
       out.rems = n.rems.slice(0, 3).map(function (r) {
         r = r || {};
@@ -166,7 +167,7 @@ function pickDue(state, today, sentMap) {
   const byContract = {};
   state.contracts.forEach(function (c) { byContract[c.id] = c; });
   state.notices.forEach(function (n) {
-    if (n.done || !n.rems || !n.rems.length) return;
+    if (n.done || n.archived || !n.rems || !n.rems.length) return;
     const d = daysUntil(today, n.date);
     if (d < 0) return;
     const reached = n.rems.filter(function (r) { return r.days >= d; }).sort(function (a, b) { return a.days - b.days; })[0];
