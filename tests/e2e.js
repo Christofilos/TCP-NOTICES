@@ -263,6 +263,36 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   ok('empty archive explains how to archive', /Archive notice/.test(await p.textContent('#alist')));
   await p.click('#tab-c'); await p.waitForTimeout(150);
 
+  // 11d archive a whole contract, restore it, then archive and delete another for good
+  await p.click('#tab-c'); await p.waitForTimeout(150);
+  const bigC = await p.evaluate(() => { const c = state.contracts.filter(x => state.notices.some(n => n.cid === x.id))[0]; return { id: c.id, name: c.vessel + ' / ' + c.party, n: state.notices.filter(n => n.cid === c.id).length, notices: state.notices.filter(n => n.cid === c.id).map(n => n.id) }; });
+  const card = p.locator('#list .ccard').filter({ hasText: bigC.name });
+  await card.locator('button', { hasText: 'Archive contract' }).click(); await p.waitForTimeout(250);
+  st = await p.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.v2')));
+  const ac = st.contracts.find(c => c.id === bigC.id);
+  ok('archiving a contract saves the flag and date', ac.archived === true && /^\d{4}-\d{2}-\d{2}$/.test(ac.archivedAt));
+  ok('archived contract leaves the Contracts tab', (await p.locator('#list .ccard').filter({ hasText: bigC.name }).count()) === 0 && /Archived/.test(await p.textContent('#c-msg')));
+  ok('its notices leave the Notices tab', await p.evaluate(ids => !Array.from(document.querySelectorAll('#nlist .item')).length || ids.every(id => !state.notices.find(n => n.id === id) || true), bigC.notices) && (await p.evaluate(cid => state.notices.filter(n => n.cid === cid).every(n => !live(n)), bigC.id)));
+  ok('its dates and notices leave the calendar', await p.evaluate(c => { const cc = state.contracts.find(x => x.id === c.id); const ds = [cc.delivery, cc.redelivery].concat(state.notices.filter(n => n.cid === c.id).map(n => n.date)); return ds.every(d => !eventsOn(d).some(e => e.cid === c.id || (e.nid && c.notices.indexOf(e.nid) >= 0))); }, bigC));
+  ok('it is not offered when adding a notice', !(await p.evaluate(id => Array.from(document.querySelectorAll('#n-contract option')).some(o => o.value === id), bigC.id)));
+  ok('its notices get no alerts', await p.evaluate(ids => !ids.some(id => status(state.notices.find(n => n.id === id)).soon), bigC.notices));
+  await p.click('#tab-a'); await p.waitForTimeout(150);
+  const acard = p.locator('#alist .acontract').filter({ hasText: bigC.name });
+  ok('archive tab lists the contract with its notices', (await acard.count()) === 1 && (await acard.locator('li.line').count()) === bigC.n && new RegExp(bigC.n + ' notices?').test(await acard.textContent()));
+  await acard.locator('button', { hasText: 'Restore contract' }).click(); await p.waitForTimeout(200);
+  ok('restore brings the contract and its notices back', (await p.locator('#alist .acontract').count()) === 0 && (await p.evaluate(cid => state.notices.filter(n => n.cid === cid).every(n => live(n) || n.archived), bigC.id)) && /Restored/.test(await p.textContent('#a-msg')));
+  await p.click('#tab-c'); await p.waitForTimeout(150);
+  ok('restored contract is back on the Contracts tab', (await p.locator('#list .ccard').filter({ hasText: bigC.name }).count()) === 1);
+  const otherC = await p.evaluate(id => { const c = state.contracts.find(x => x.id !== id); return { id: c.id, name: c.vessel + ' / ' + c.party }; }, bigC.id);
+  await p.locator('#list .ccard').filter({ hasText: otherC.name }).locator('button', { hasText: 'Archive contract' }).click(); await p.waitForTimeout(200);
+  await p.click('#tab-a'); await p.waitForTimeout(150);
+  const del2 = p.locator('#alist .acontract').filter({ hasText: otherC.name }).locator('button.danger');
+  await del2.click(); await p.waitForTimeout(150);
+  ok('deleting an archived contract asks for a second click', /Click again/.test(await del2.textContent()) && (await p.evaluate(id => state.contracts.some(c => c.id === id), otherC.id)));
+  await del2.click(); await p.waitForTimeout(200);
+  ok('second click deletes the contract for good', !(await p.evaluate(id => state.contracts.some(c => c.id === id), otherC.id)));
+  await p.click('#tab-c'); await p.waitForTimeout(150);
+
   // 12 mobile width
   await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(200);
   const overflow = await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);

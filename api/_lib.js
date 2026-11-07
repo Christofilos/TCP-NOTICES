@@ -124,6 +124,7 @@ function cleanState(raw) {
     seen[id] = true;
     contracts.push({ id: id, ref: str(c.ref, 40), vessel: str(c.vessel, 60), party: str(c.party, 60),
       delivery: DATE_RE.test(c.delivery) ? c.delivery : '', redelivery: DATE_RE.test(c.redelivery) ? c.redelivery : '' });
+    if (c.archived === true) { contracts[contracts.length - 1].archived = true; if (DATE_RE.test(c.archivedAt)) contracts[contracts.length - 1].archivedAt = c.archivedAt; }
   });
   const seenN = {};
   const notices = [];
@@ -168,6 +169,7 @@ function pickDue(state, today, sentMap) {
   state.contracts.forEach(function (c) { byContract[c.id] = c; });
   state.notices.forEach(function (n) {
     if (n.done || n.archived || !n.rems || !n.rems.length) return;
+    if (byContract[n.cid] && byContract[n.cid].archived) return;
     const d = daysUntil(today, n.date);
     if (d < 0) return;
     const reached = n.rems.filter(function (r) { return r.days >= d; }).sort(function (a, b) { return a.days - b.days; })[0];

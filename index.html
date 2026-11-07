@@ -56,6 +56,8 @@ label[hidden],small[hidden]{display:none}
 .ccard{padding:10px 12px;display:grid;gap:2px}
 .ccard .actions{margin-top:8px}
 .agroup ul.lines{margin-top:6px}
+.ahead{font-size:.95rem;margin:14px 0 8px}
+.acontract .actions{margin-top:8px}
 .aline{grid-template-columns:minmax(0,1fr) auto;align-items:center}
 .aline .ainfo{display:grid;gap:1px;min-width:0}
 .aline .ainfo .lname{font-weight:600;overflow-wrap:anywhere}
@@ -270,7 +272,7 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
       <div id="nlist"></div>
       </div>
       <div id="pane-a" role="tabpanel" aria-labelledby="tab-a" hidden>
-        <p class="hint">Archived notices are kept here. They are not shown on the calendar or in the lists, and get no alerts or reminder emails. Restore one to bring it back.</p>
+        <p class="hint">Archived contracts and notices are kept here. They are not shown on the calendar or in the lists, and get no alerts or reminder emails. Restore one to bring it back.</p>
         <small class="msg" id="a-msg" role="status"></small>
         <div id="alist"></div>
       </div>
@@ -388,9 +390,10 @@ function mailtoFor(n, r){
   var body = n.title+(c?' for '+c.vessel+' ('+c.party+')':'')+' is due on '+fmt(n.date)+'. '+status(n).text+'.';
   return 'mailto:'+r.to.join(',')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
-function live(n){ return !n.archived; }
+function liveC(c){ return !!c && !c.archived; }
+function live(n){ if(n.archived) return false; var c = byId(n.cid); return !(c && c.archived); }
 function status(n){
-  if(n.archived) return {soon:false, text:'Archived'};
+  if(!live(n)) return {soon:false, text:'Archived'};
   if(n.done) return {soon:false, text:'Actioned (switched off)'};
   var d = daysUntil(n.date);
   if(d < 0) return {soon:true, text:'Overdue by '+(-d)+(d===-1?' day':' days')};
@@ -402,6 +405,7 @@ function status(n){
 function eventsOn(key){
   var out = [];
   state.contracts.forEach(function(c){
+    if(!liveC(c)) return;
     if(c.delivery===key) out.push({cls:'leg', label:'Delivery: '+c.vessel, cid:c.id});
     if(c.redelivery===key) out.push({cls:'leg', label:'Redelivery: '+c.vessel, cid:c.id});
   });
@@ -462,12 +466,13 @@ function renderCalendar(){
 function renderSelect(){
   var sel = document.getElementById('n-contract'); var keep = sel.value; sel.textContent = '';
   var btn = document.getElementById('n-submit');
-  if(!state.contracts.length){
+  var cs = state.contracts.filter(liveC);
+  if(!cs.length){
     var o = el('option',null,'Add a contract first'); o.value = ''; sel.appendChild(o); btn.disabled = true; return;
   }
   btn.disabled = false;
-  state.contracts.forEach(function(c){ var o = el('option',null,c.vessel+' / '+c.party+(c.ref?' ('+c.ref+')':'')); o.value = c.id; sel.appendChild(o); });
-  if(keep && byId(keep)) sel.value = keep;
+  cs.forEach(function(c){ var o = el('option',null,c.vessel+' / '+c.party+(c.ref?' ('+c.ref+')':'')); o.value = c.id; sel.appendChild(o); });
+  if(keep && liveC(byId(keep))) sel.value = keep;
 }
 
 function sortedContracts(){
@@ -476,8 +481,8 @@ function sortedContracts(){
 
 function renderList(){
   var box = document.getElementById('list'); box.textContent = '';
-  if(!state.contracts.length){ box.appendChild(el('p','empty','No contracts yet. Fill in the form above to add one.')); return; }
-  sortedContracts().forEach(function(c){
+  if(!state.contracts.filter(liveC).length){ box.appendChild(el('p','empty', state.contracts.length ? 'All contracts are archived. You can restore them on the Archive tab.' : 'No contracts yet. Fill in the form above to add one.')); return; }
+  sortedContracts().filter(liveC).forEach(function(c){
     var ns = state.notices.filter(function(n){ return n.cid===c.id && live(n); });
     var nArch = state.notices.filter(function(n){ return n.cid===c.id && !live(n); }).length;
     var attn = ns.filter(function(n){ return !n.done && status(n).soon; }).length;
@@ -528,7 +533,15 @@ function renderList(){
     };
     var edc = el('button',null,'Edit contract'); edc.type='button';
     edc.onclick = function(){ startEditContract(c); };
-    act.appendChild(add); act.appendChild(edc); act.appendChild(rm); card.appendChild(act);
+    var arc = el('button',null,'Archive contract'); arc.type='button';
+    arc.setAttribute('aria-label','Archive contract '+c.vessel+' / '+c.party);
+    arc.onclick = function(){
+      if(editingC===c.id) endEdit();
+      if(editingN){ var en = state.notices.filter(function(x){ return x.id===editingN; })[0]; if(en && en.cid===c.id) endEdit(); }
+      c.archived = true; c.archivedAt = ymd(new Date()); armed = null; save();
+      say('c-msg', 'Archived '+c.vessel+' / '+c.party+' and its notices. You can find them on the Archive tab.', true);
+    };
+    act.appendChild(add); act.appendChild(edc); act.appendChild(arc); act.appendChild(rm); card.appendChild(act);
     box.appendChild(card);
   });
 }
@@ -594,36 +607,74 @@ function render(){ renderCalendar(); renderSelect(); renderList(); renderNotices
 
 var armedA = null;
 function renderArchive(){
-  var arch = state.notices.filter(function(n){ return !live(n); });
-  document.getElementById('a-count').textContent = arch.length ? '('+arch.length+')' : '';
+  var archC = sortedContracts().filter(function(c){ return c.archived; });
+  var arch = state.notices.filter(function(n){ return n.archived && liveC(byId(n.cid)); });
+  var total = archC.length + arch.length;
+  document.getElementById('a-count').textContent = total ? '('+total+')' : '';
   var box = document.getElementById('alist'); box.textContent = '';
-  if(!arch.length){ box.appendChild(el('p','empty','No archived notices. To archive one, open it with Edit and press Archive notice.')); return; }
-  sortedContracts().forEach(function(c){
-    var ns = arch.filter(function(n){ return n.cid===c.id; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
-    if(!ns.length) return;
-    var grp = el('div','contract ccard agroup');
-    grp.appendChild(el('strong',null,c.vessel+' / '+c.party));
-    var ul = el('ul','lines');
-    ns.forEach(function(n){
-      var li = el('li','line aline '+(n.type==='shipping'?'l-ship':'l-con'));
-      var info = el('div','ainfo');
-      info.appendChild(el('span','lname',n.title));
-      info.appendChild(el('small',null,'Due '+fmt(n.date)+(n.archivedAt?' · archived '+fmt(n.archivedAt):'')));
-      var bt = el('div','btns');
-      var rs = el('button',null,'Restore'); rs.type='button'; rs.setAttribute('aria-label','Restore '+n.title);
-      rs.onclick = function(){ delete n.archived; delete n.archivedAt; armedA = null; save(); say('a-msg', 'Restored "'+n.title+'". It is back on the Notices tab.', true); };
-      var dl = el('button','danger'+(armedA===n.id?' armed':''), armedA===n.id?'Click again to delete':'Delete'); dl.type='button';
-      dl.setAttribute('aria-label','Delete '+n.title+' for good');
-      dl.onclick = function(){
-        if(armedA!==n.id){ armedA = n.id; renderArchive(); return; }
-        state.notices = state.notices.filter(function(x){ return x.id!==n.id; }); armedA = null; save();
-        say('a-msg', 'Deleted for good.', true);
-      };
-      bt.appendChild(rs); bt.appendChild(dl);
-      li.appendChild(info); li.appendChild(bt); ul.appendChild(li);
+  if(!total){ box.appendChild(el('p','empty','Nothing archived. To archive a notice, open it with Edit and press Archive notice. To archive a whole contract, press Archive contract on the Contracts tab.')); return; }
+  function delBtn(key, label, onGo, text){
+    var dl = el('button','danger'+(armedA===key?' armed':''), armedA===key?'Click again to delete':(text||'Delete')); dl.type='button';
+    dl.setAttribute('aria-label', label);
+    dl.onclick = function(){ if(armedA!==key){ armedA = key; renderArchive(); return; } armedA = null; onGo(); };
+    return dl;
+  }
+  if(archC.length){
+    box.appendChild(el('h3','ahead','Archived contracts'));
+    archC.forEach(function(c){
+      var ns = state.notices.filter(function(n){ return n.cid===c.id; });
+      var card = el('div','contract ccard agroup acontract');
+      card.appendChild(el('strong',null,c.vessel+' / '+c.party));
+      if(c.ref) card.appendChild(el('small',null,'Ref '+c.ref));
+      card.appendChild(el('small',null,'Delivery '+fmt(c.delivery)+' to redelivery '+fmt(c.redelivery)));
+      card.appendChild(el('small',null,ns.length+(ns.length===1?' notice':' notices')+(c.archivedAt?' · archived '+fmt(c.archivedAt):'')));
+      if(ns.length){
+        var ul = el('ul','lines');
+        ns.slice().sort(function(a,b){ return a.date.localeCompare(b.date); }).forEach(function(n){
+          var li = el('li','line '+(n.type==='shipping'?'l-ship':'l-con'));
+          li.appendChild(el('span','lname',n.title));
+          li.appendChild(el('span','ldate',fmt(n.date)));
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+      }
+      var bt = el('div','actions');
+      var rs = el('button',null,'Restore contract'); rs.type='button'; rs.setAttribute('aria-label','Restore contract '+c.vessel+' / '+c.party);
+      rs.onclick = function(){ delete c.archived; delete c.archivedAt; armedA = null; save(); say('a-msg', 'Restored '+c.vessel+' / '+c.party+'. It is back on the Contracts tab with its notices.', true); };
+      bt.appendChild(rs);
+      bt.appendChild(delBtn('c:'+c.id, 'Delete contract '+c.vessel+' / '+c.party+' and its notices for good', function(){
+        state.contracts = state.contracts.filter(function(x){ return x.id!==c.id; });
+        state.notices = state.notices.filter(function(x){ return x.cid!==c.id; });
+        save(); say('a-msg', 'Contract and its notices deleted for good.', true);
+      }, 'Delete contract'));
+      card.appendChild(bt); box.appendChild(card);
     });
-    grp.appendChild(ul); box.appendChild(grp);
-  });
+  }
+  if(arch.length){
+    box.appendChild(el('h3','ahead','Archived notices'));
+    sortedContracts().filter(liveC).forEach(function(c){
+      var ns = arch.filter(function(n){ return n.cid===c.id; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
+      if(!ns.length) return;
+      var grp = el('div','contract ccard agroup');
+      grp.appendChild(el('strong',null,c.vessel+' / '+c.party));
+      var ul = el('ul','lines');
+      ns.forEach(function(n){
+        var li = el('li','line aline '+(n.type==='shipping'?'l-ship':'l-con'));
+        var info = el('div','ainfo');
+        info.appendChild(el('span','lname',n.title));
+        info.appendChild(el('small',null,'Due '+fmt(n.date)+(n.archivedAt?' · archived '+fmt(n.archivedAt):'')));
+        var bt = el('div','btns');
+        var rs = el('button',null,'Restore'); rs.type='button'; rs.setAttribute('aria-label','Restore '+n.title);
+        rs.onclick = function(){ delete n.archived; delete n.archivedAt; armedA = null; save(); say('a-msg', 'Restored "'+n.title+'". It is back on the Notices tab.', true); };
+        bt.appendChild(rs);
+        bt.appendChild(delBtn(n.id, 'Delete '+n.title+' for good', function(){
+          state.notices = state.notices.filter(function(x){ return x.id!==n.id; }); save(); say('a-msg', 'Deleted for good.', true);
+        }));
+        li.appendChild(info); li.appendChild(bt); ul.appendChild(li);
+      });
+      grp.appendChild(ul); box.appendChild(grp);
+    });
+  }
 }
 
 function checkReminders(notify){

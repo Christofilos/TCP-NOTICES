@@ -63,6 +63,11 @@ const PW = { 'x-app-password': 'correct horse' };
   const keptArch = L.cleanState({ contracts: [], notices: [{ id: 'z', date: '2026-11-10', archived: true, archivedAt: '2026-11-07' }, { id: 'y', date: '2026-11-10', archived: 'yes', archivedAt: 'junk' }] });
   check('archive flag and date survive saving, junk does not', keptArch.notices[0].archived === true && keptArch.notices[0].archivedAt === '2026-11-07' && keptArch.notices[1].archived === undefined);
 
+  const archC = JSON.parse(JSON.stringify(st)); archC.contracts[0].archived = true;
+  check('notices on an archived contract are never emailed', L.pickDue(archC, '2026-11-04', {}).length === 0);
+  const keptC = L.cleanState({ contracts: [{ id: 'k', vessel: 'V', archived: true, archivedAt: '2026-11-07' }, { id: 'j', archived: 1, archivedAt: 'x' }], notices: [] });
+  check('contract archive flag survives saving, junk does not', keptC.contracts[0].archived === true && keptC.contracts[0].archivedAt === '2026-11-07' && keptC.contracts[1].archived === undefined);
+
   console.log('email text');
   const mail = L.buildEmail({ notice: { title: '<script>x</script>', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'MV\nTest', party: 'A&B', ref: '' }, rem: { days: 10 }, d: 10 });
   check('html escapes user text', mail.html.indexOf('<script>') < 0 && mail.html.indexOf('&lt;script&gt;') > 0 && mail.html.indexOf('A&amp;B') > 0);
