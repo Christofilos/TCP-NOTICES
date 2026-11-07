@@ -157,6 +157,19 @@ const PAGE = 'file://' + require('path').resolve(__dirname, '../index.html');
   ok('persisted after reload', st.notices.length === 7 && st.contracts.length === 2);
   ok('contracts render after reload', (await p.locator('#list .ccard').count()) === 2);
 
+  // notices tab: each contract is a drop-down, closed after a reload
+  await p.click('#tab-n'); await p.waitForTimeout(150);
+  const ng = p.locator('#nlist details.ngroup').first();
+  ok('notice groups start closed', (await p.locator('#nlist details.ngroup[open]').count()) === 0 && !(await p.locator('#nlist .item').first().isVisible()));
+  ok('group heading shows count and Show', /\d+ notices?/.test(await ng.locator('summary').textContent()) && /Show/.test(await ng.locator('summary').textContent()), await ng.locator('summary').textContent());
+  await ng.locator('summary').click(); await p.waitForTimeout(150);
+  ok('clicking a group opens its notices', await p.locator('#nlist .item').first().isVisible() && /Hide/.test(await ng.locator('summary').textContent()));
+  await p.evaluate(() => save()); await p.waitForTimeout(150);
+  ok('group stays open after a change', await p.locator('#nlist details.ngroup').first().evaluate(e => e.open));
+  await p.locator('#nlist details.ngroup summary').first().focus(); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok('keyboard closes a group', !(await p.locator('#nlist details.ngroup').first().evaluate(e => e.open)));
+  await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+
   // 11 delete notice, mark done
   await p.click('#tab-n');
   const sw = p.locator('#nlist input[role=switch]');

@@ -136,6 +136,13 @@ h3{margin:18px 0 8px;font-size:1rem}
 .contract{border:1px solid var(--line);border-radius:8px;margin-bottom:10px;background:var(--bg)}
 .contract>summary{padding:10px 12px;cursor:pointer;display:grid;gap:2px}
 .contract>summary strong{font-size:1rem}
+.ngroup>summary{display:flex;align-items:center;gap:10px;list-style:none}
+.ngroup>summary::-webkit-details-marker{display:none}
+.ngroup>summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.ngroup[open]>summary::before{transform:rotate(45deg)}
+.ngroup>summary .gtext{display:grid;gap:2px;min-width:0}
+.ngroup>summary .ddhint{margin-left:auto;font-weight:600;font-size:.8rem;color:var(--ink)}
+.ngroup>summary:focus-visible{outline:2px solid var(--ink);outline-offset:-2px;border-radius:8px}
 .contract small{color:var(--muted)}
 .contract .alert{color:var(--warn);font-weight:600}
 .cbody{padding:0 12px 12px}
@@ -321,7 +328,7 @@ if(!state){
 }
 var view = new Date(); view.setDate(1);
 var selected = ymd(new Date());
-var closed = {}; var armed = null; var linesOpen = {};
+var openN = {}; var armed = null; var linesOpen = {};
 var editingC = null, editingN = null;
 
 function read(k, fallback){ try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e){ return fallback; } }
@@ -533,11 +540,15 @@ function renderNotices(){
     var ns = state.notices.filter(function(n){ return n.cid===c.id && live(n); }).sort(function(a,b){ return (a.done-b.done) || a.date.localeCompare(b.date); });
     if(!ns.length) return;
     var attn = ns.filter(function(n){ return status(n).soon; }).length;
-    var det = el('details','contract'); det.open = !closed[c.id];
-    det.ontoggle = function(){ closed[c.id] = !det.open; };
+    // Each contract's notices are a drop-down, closed until opened (openN remembers which are open)
+    var det = el('details','contract ngroup'); det.open = !!openN[c.id];
     var sm = el('summary');
-    sm.appendChild(el('strong',null,c.vessel+' / '+c.party));
-    sm.appendChild(el('small',attn?'alert':null, ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'')));
+    var st = el('span','gtext');
+    st.appendChild(el('strong',null,c.vessel+' / '+c.party));
+    st.appendChild(el('small',attn?'alert':null, ns.length+(ns.length===1?' notice':' notices')+(attn?', '+attn+' need attention':'')));
+    sm.appendChild(st);
+    var hint = el('span','ddhint',det.open?'Hide':'Show'); sm.appendChild(hint);
+    det.ontoggle = function(){ openN[c.id] = det.open; hint.textContent = det.open ? 'Hide' : 'Show'; };
     det.appendChild(sm);
     var body = el('div','cbody');
     var ul = el('ul','list');
@@ -673,7 +684,7 @@ document.getElementById('nform').onsubmit = function(e){
     if(!etitle || !edate){ say('n-msg', 'Enter a name and a due date.'); return; }
     var ecur = state.notices.filter(function(x){ return x.id===editingN; })[0];
     if(ecur){ ecur.cid = cid; ecur.title = etitle; ecur.type = document.getElementById('n-type').value; ecur.date = edate; ecur.rems = rems; delete ecur.remind; delete ecur.reminds; }
-    endEdit(); save(); say('n-msg', 'Changes saved.', true); return;
+    openN[cid] = true; endEdit(); save(); say('n-msg', 'Changes saved.', true); return;
   }
   var what = document.getElementById('n-what').value;
   var type = document.getElementById('n-type').value;
@@ -697,6 +708,7 @@ document.getElementById('nform').onsubmit = function(e){
   if(skipped) say('n-msg', skipped+(skipped===1?' notice was':' notices were')+' already on this contract, so not added again.'+(added?' '+added+' added.':''));
   else say('n-msg', added+(added===1?' notice added.':' notices added.'), true);
   document.getElementById('n-title').value = '';
+  openN[cid] = true;
   save();
 };
 
