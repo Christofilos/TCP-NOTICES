@@ -68,10 +68,15 @@ const PW = { 'x-app-password': 'correct horse' };
   const keptC = L.cleanState({ contracts: [{ id: 'k', vessel: 'V', archived: true, archivedAt: '2026-11-07' }, { id: 'j', archived: 1, archivedAt: 'x' }], notices: [] });
   check('contract archive flag survives saving, junk does not', keptC.contracts[0].archived === true && keptC.contracts[0].archivedAt === '2026-11-07' && keptC.contracts[1].archived === undefined);
 
+  const keptNotes = L.cleanState({ contracts: [], notices: [{ id: 'z', date: '2026-11-10', notes: '  Agreed by email  ' }, { id: 'y', date: '2026-11-10', notes: 'x'.repeat(1500) }, { id: 'w', date: '2026-11-10', notes: 42 }] });
+  check('comments survive saving, trimmed and capped at 1000', keptNotes.notices[0].notes === 'Agreed by email' && keptNotes.notices[1].notes.length === 1000 && keptNotes.notices[2].notes === undefined);
+
   console.log('email text');
   const mail = L.buildEmail({ notice: { title: '<script>x</script>', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'MV\nTest', party: 'A&B', ref: '' }, rem: { days: 10 }, d: 10 });
   check('html escapes user text', mail.html.indexOf('<script>') < 0 && mail.html.indexOf('&lt;script&gt;') > 0 && mail.html.indexOf('A&amp;B') > 0);
   check('subject has no line breaks', mail.subject.indexOf('\n') < 0);
+  const mailN = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', type: 'shipping', notes: 'Check <b>bunkers</b>' }, contract: { vessel: 'V' }, rem: { days: 3 }, d: 3 });
+  check('email includes comments, escaped', /Comments: Check <b>bunkers<\/b>/.test(mailN.text) && mailN.html.indexOf('Check &lt;b&gt;bunkers') > 0);
 
   console.log('endpoints: password');
   const ping = require('../api/ping'), state = require('../api/state'), status = require('../api/status'),

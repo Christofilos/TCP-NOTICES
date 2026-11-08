@@ -134,6 +134,7 @@ function cleanState(raw) {
     if (!id || seenN[id] || !DATE_RE.test(n.date)) return;
     seenN[id] = true;
     const out = { id: id, cid: str(n.cid, 60), title: str(n.title, 80), type: n.type === 'contract' ? 'contract' : 'shipping', date: n.date, done: !!n.done };
+    const notes = str(n.notes, 1000).trim(); if (notes) out.notes = notes;
     if (n.archived === true) { out.archived = true; if (DATE_RE.test(n.archivedAt)) out.archivedAt = n.archivedAt; }
     if (Array.isArray(n.rems)) {
       out.rems = n.rems.slice(0, 3).map(function (r) {
@@ -197,6 +198,7 @@ function buildEmail(it) {
     ['Type', n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation'],
     ['Reminder', it.rem.days + (it.rem.days === 1 ? ' day' : ' days') + ' before the due date']
   ];
+  if (n.notes) lines.push(['Comments', n.notes]);
   const text = lines.map(function (l) { return l[0] + ': ' + l[1]; }).join('\n') + '\n\nSent automatically by TCP Notices.';
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#18242F">' +
     '<p style="margin:0 0 12px"><strong>' + esc(n.title) + '</strong> is ' + esc(when) + '.</p>' +

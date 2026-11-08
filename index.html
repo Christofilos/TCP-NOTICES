@@ -64,6 +64,9 @@ label[hidden],small[hidden]{display:none}
 .aline .btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .aline .btns button{padding:4px 10px;font-size:.8rem}
 #tab-a span{font-weight:400}
+.notesfield textarea{width:100%;resize:vertical;display:block;margin-top:4px}
+.notesfield .opt{font-weight:400;color:var(--muted)}
+.item small.notes{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;font-style:italic;border-left:2px solid var(--line);padding-left:6px;margin-top:2px;overflow-wrap:anywhere}
 .lineset{margin-top:2px}
 .lineset>summary{cursor:pointer;display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);list-style:none;padding:4px 0;border-radius:4px}
 .lineset>summary::-webkit-details-marker{display:none}
@@ -97,7 +100,7 @@ ul.lines{list-style:none;margin:6px 0 0;padding:0;border-top:1px solid var(--lin
 .head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .head h2{flex:1;margin:0;font-size:1.15rem}
 button{font:inherit;color:inherit;cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ship);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--ship);outline-offset:2px}
 .nav{background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px}
 .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .dow{font-size:.75rem;color:var(--muted);text-align:center;padding:4px 0}
@@ -125,7 +128,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--c)}
 form{display:grid;gap:10px}
 label{display:grid;gap:4px;font-size:.85rem;font-weight:600}
-input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .remrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:10px}
 .item a{font-size:.8rem;font-weight:600;color:var(--ship)}
@@ -243,9 +246,6 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
             </details>
           </div>
           <div class="row">
-            <label>Type
-              <select id="n-type"><option value="shipping">Shipping notice</option><option value="contract">Contract obligation</option></select>
-            </label>
             <label id="n-date-wrap">Due date<input id="n-date" type="date" required></label>
           </div>
           <small class="hint" id="n-hint" hidden></small>
@@ -262,6 +262,7 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
             <label>3rd reminder sent to<input id="n-to3" type="text" placeholder="a@company.com, b@company.com"></label>
           </div>
           <small class="hint">Whole days before the due date. Separate several email addresses with commas. Leave a reminder empty if you don't need it.</small>
+          <label class="notesfield"><span>Comments <span class="opt">(optional)</span></span><textarea id="n-notes" rows="3" maxlength="1000" placeholder="e.g. Agreed with charterers by email on 3 Nov"></textarea></label>
           <button class="primary" type="submit" id="n-submit">Add notice</button>
           <button class="ghost" type="button" id="n-cancel" hidden>Cancel editing</button>
           <button class="ghost" type="button" id="n-archive" hidden>Archive notice</button>
@@ -581,6 +582,7 @@ function renderNotices(){
       var rl = remindsOf(n);
       var anyTo = !n.rems || n.rems.some(function(r){ return r.to.length; });
       mid.appendChild(el('small',null,'Reminders: '+rl.join(', ')+' days before'+(anyTo ? '' : ' (no recipients)')));
+      if(n.notes){ var nt = el('small','notes',n.notes); nt.title = n.notes; mid.appendChild(nt); }
       var cr = (!n.done && s.soon) ? currentRem(n) : null;
       if(cr && cr.to.length){
         var line = el('small',null,'Email: ');
@@ -724,6 +726,9 @@ document.getElementById('cform').onsubmit = function(e){
   updateEstimate();
 };
 
+function readNotes(){ return document.getElementById('n-notes').value.trim().slice(0, 1000); }
+function setNotes(n, text){ if(text) n.notes = text; else delete n.notes; }
+
 document.getElementById('nform').onsubmit = function(e){
   e.preventDefault();
   var cid = document.getElementById('n-contract').value; if(!cid) return;
@@ -734,12 +739,14 @@ document.getElementById('nform').onsubmit = function(e){
     var edate = document.getElementById('n-date').value;
     if(!etitle || !edate){ say('n-msg', 'Enter a name and a due date.'); return; }
     var ecur = state.notices.filter(function(x){ return x.id===editingN; })[0];
-    if(ecur){ ecur.cid = cid; ecur.title = etitle; ecur.type = document.getElementById('n-type').value; ecur.date = edate; ecur.rems = rems; delete ecur.remind; delete ecur.reminds; }
+    if(ecur){ ecur.cid = cid; ecur.title = etitle; ecur.date = edate; ecur.rems = rems; setNotes(ecur, readNotes()); delete ecur.remind; delete ecur.reminds; }
     openN[cid] = true; endEdit(); save(); say('n-msg', 'Changes saved.', true); return;
   }
   var what = document.getElementById('n-what').value;
-  var type = document.getElementById('n-type').value;
   var p = PRESETS[what];
+  // Type is no longer chosen in the form: delivery and redelivery notices are shipping notices, everything else a contract obligation
+  var type = p ? p.type : 'contract';
+  var notes = readNotes();
   var toAdd = [];
   if(p){
     var c = byId(cid), days = tickedDays();
@@ -753,12 +760,15 @@ document.getElementById('nform').onsubmit = function(e){
   toAdd.forEach(function(t, i){
     var dup = state.notices.some(function(x){ return live(x) && x.cid===cid && x.title===t.title && x.date===t.date; });
     if(dup){ skipped++; return; }
-    state.notices.push({id: uid()+'-'+i, cid: cid, title: t.title, type: type, date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false});
+    var nn = {id: uid()+'-'+i, cid: cid, title: t.title, type: type, date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false};
+    setNotes(nn, notes);
+    state.notices.push(nn);
   });
   var added = toAdd.length - skipped;
   if(skipped) say('n-msg', skipped+(skipped===1?' notice was':' notices were')+' already on this contract, so not added again.'+(added?' '+added+' added.':''));
   else say('n-msg', added+(added===1?' notice added.':' notices added.'), true);
   document.getElementById('n-title').value = '';
+  document.getElementById('n-notes').value = '';
   openN[cid] = true;
   save();
 };
@@ -971,13 +981,11 @@ function applyWhat(){
   var p = PRESETS[what];
   document.getElementById('n-other-wrap').hidden = (what !== '');
   document.getElementById('n-title').required = (what === '');
-  if(what === 'Heel nomination' || what === 'Option period lifting') document.getElementById('n-type').value = 'contract';
   document.getElementById('n-days-wrap').hidden = !p;
   document.getElementById('n-date-wrap').hidden = !!p;
   document.getElementById('n-date').required = !p;
   if(p){
     Array.prototype.forEach.call(document.querySelectorAll('#n-days input'), function(cb){ cb.checked = (parseInt(cb.value,10)===p.days); });
-    document.getElementById('n-type').value = p.type;
   }
   updateEstimate();
 }
@@ -1004,14 +1012,14 @@ function exportExcel(){
   var cs = state.contracts.slice().sort(function(a,b){ return (a.delivery||'').localeCompare(b.delivery||''); });
   var sum = [['Vessel','Counterparty','Contract reference','Delivery date','Redelivery date','Notices','Open notices','Needing attention']];
   var rows = [['Vessel','Counterparty','Contract reference','Delivery date','Redelivery date','Notice','Type','Due date','Days until due','Status','Actioned',
-    '1st reminder (days before)','1st reminder sent to','2nd reminder (days before)','2nd reminder sent to','3rd reminder (days before)','3rd reminder sent to']];
+    '1st reminder (days before)','1st reminder sent to','2nd reminder (days before)','2nd reminder sent to','3rd reminder (days before)','3rd reminder sent to','Comments']];
   cs.forEach(function(c){
     var ns = state.notices.filter(function(n){ return n.cid===c.id; }).sort(function(a,b){ return a.date.localeCompare(b.date); });
     var open = ns.filter(function(n){ return !n.done; }).length;
     var attn = ns.filter(function(n){ return !n.done && status(n).soon; }).length;
     sum.push([c.vessel, c.party, c.ref||'', xlDate(c.delivery), xlDate(c.redelivery), ns.length, open, attn]);
     var head = [c.vessel, c.party, c.ref||'', xlDate(c.delivery), xlDate(c.redelivery)];
-    if(!ns.length){ rows.push(head.concat(['(no notices)','','','','','','','','','','',''])); return; }
+    if(!ns.length){ rows.push(head.concat(['(no notices)','','','','','','','','','','','',''])); return; }
     ns.forEach(function(n){
       var r = [n.title, n.type==='shipping' ? 'Shipping notice' : 'Contract obligation', xlDate(n.date), daysUntil(n.date), status(n).text, n.done ? 'Yes' : 'No'];
       var days = remindsOf(n);
@@ -1019,6 +1027,7 @@ function exportExcel(){
         var to = (n.rems && n.rems[i]) ? n.rems[i].to : [];
         r.push(days[i]===undefined ? '' : days[i], to.join(', '));
       }
+      r.push(n.notes || '');
       rows.push(head.concat(r));
     });
   });
@@ -1026,7 +1035,7 @@ function exportExcel(){
   var w1 = XLSX.utils.aoa_to_sheet(sum);
   w1['!cols'] = [{wch:22},{wch:24},{wch:18},{wch:14},{wch:14},{wch:9},{wch:13},{wch:17}];
   var w2 = XLSX.utils.aoa_to_sheet(rows);
-  w2['!cols'] = [{wch:22},{wch:24},{wch:18},{wch:14},{wch:14},{wch:30},{wch:20},{wch:14},{wch:14},{wch:22},{wch:7},{wch:14},{wch:34},{wch:14},{wch:34},{wch:14},{wch:34}];
+  w2['!cols'] = [{wch:22},{wch:24},{wch:18},{wch:14},{wch:14},{wch:30},{wch:20},{wch:14},{wch:14},{wch:22},{wch:7},{wch:14},{wch:34},{wch:14},{wch:34},{wch:14},{wch:34},{wch:40}];
   XLSX.utils.book_append_sheet(wb, w1, 'Contracts');
   XLSX.utils.book_append_sheet(wb, w2, 'Notices by contract');
   var out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
@@ -1070,6 +1079,7 @@ function endEdit(){
   document.getElementById('n-submit').textContent = 'Add notice';
   document.getElementById('n-cancel').hidden = true;
   document.getElementById('n-archive').hidden = true;
+  document.getElementById('n-notes').value = '';
   document.getElementById('n-what-wrap').hidden = false;
   document.getElementById('n-what').value = 'Delivery notice';
   document.getElementById('n-title').value = '';
@@ -1109,7 +1119,7 @@ function startEditNotice(n){
   document.getElementById('n-what').value = '';
   applyWhat();
   document.getElementById('n-title').value = n.title;
-  document.getElementById('n-type').value = n.type;
+  document.getElementById('n-notes').value = n.notes || '';
   document.getElementById('n-date').value = n.date;
   var days = remindsOf(n);
   [['n-remind','n-to1'],['n-remind2','n-to2'],['n-remind3','n-to3']].forEach(function(p, i){
