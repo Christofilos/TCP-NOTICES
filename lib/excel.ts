@@ -14,16 +14,16 @@ function xlDate(s: string): Cell {
 }
 
 export function buildSheets(state: AppState): { sum: Cell[][]; rows: Cell[][] } {
-  const sum: Cell[][] = [['Vessel', 'Counterparty', 'Contract reference', 'Delivery date', 'Redelivery date', 'Notices', 'Open notices', 'Needing attention']];
+  const sum: Cell[][] = [['Vessel', 'Counterparty', 'Contract reference', 'Delivery date', 'Redelivery date', 'Notices', 'Open notices', 'Needing attention', 'Operator']];
   const rows: Cell[][] = [['Vessel', 'Counterparty', 'Contract reference', 'Delivery date', 'Redelivery date', 'Notice', 'Type', 'Due date', 'Days until due', 'Status', 'Actioned',
-    '1st reminder (days before)', '1st reminder sent to', '2nd reminder (days before)', '2nd reminder sent to', '3rd reminder (days before)', '3rd reminder sent to', 'Comments']];
+    '1st reminder (days before)', '1st reminder sent to', '2nd reminder (days before)', '2nd reminder sent to', '3rd reminder (days before)', '3rd reminder sent to', 'Comments', 'Operator']];
   sortedContracts(state).forEach(function (c) {
     const ns = state.notices.filter(function (n) { return n.cid === c.id; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
     const open = ns.filter(function (n) { return !n.done && live(state, n); }).length;
     const attn = ns.filter(function (n) { return !n.done && live(state, n) && status(n).soon; }).length;
-    sum.push([c.vessel, c.party, c.ref || '', xlDate(c.delivery), xlDate(c.redelivery), ns.length, open, attn]);
+    sum.push([c.vessel, c.party, c.ref || '', xlDate(c.delivery), xlDate(c.redelivery), ns.length, open, attn, c.operator || '']);
     const head: Cell[] = [c.vessel, c.party, c.ref || '', xlDate(c.delivery), xlDate(c.redelivery)];
-    if (!ns.length) { rows.push(head.concat(['(no notices)', '', '', '', '', '', '', '', '', '', '', '', ''])); return; }
+    if (!ns.length) { rows.push(head.concat(['(no notices)', '', '', '', '', '', '', '', '', '', '', '', '', c.operator || ''])); return; }
     ns.forEach(function (n) {
       // Archived notices, and notices of archived contracts, stay in the file with the status "Archived".
       const r: Cell[] = [n.title, n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation', xlDate(n.date), daysUntil(n.date), live(state, n) ? status(n).text : 'Archived', n.done ? 'Yes' : 'No'];
@@ -33,6 +33,7 @@ export function buildSheets(state: AppState): { sum: Cell[][]; rows: Cell[][] } 
         r.push(days[i] === undefined ? '' : days[i], to.join(', '));
       }
       r.push(n.notes || '');
+      r.push(c.operator || '');   // each notice takes its contract's operator
       rows.push(head.concat(r));
     });
   });
@@ -66,9 +67,9 @@ export async function exportExcel(state: AppState): Promise<string> {
   const s = buildSheets(state);
   const wb = XLSX.utils.book_new();
   const w1 = XLSX.utils.aoa_to_sheet(s.sum);
-  w1['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 17 }];
+  w1['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 17 }, { wch: 22 }];
   const w2 = XLSX.utils.aoa_to_sheet(s.rows);
-  w2['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 7 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 40 }];
+  w2['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 7 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 40 }, { wch: 22 }];
   XLSX.utils.book_append_sheet(wb, w1, 'Contracts');
   XLSX.utils.book_append_sheet(wb, w2, 'Notices by contract');
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

@@ -5,7 +5,7 @@ import type { AppState, Contract } from '../lib/types';
 import { byId, fmt, fmtWhen, live, liveC, sortedContracts, status, todayStr, uid } from '../lib/rules';
 import { enterPresses, msgClass, runIfValid, type Msg } from './forms';
 
-const BLANK = { vessel: '', party: '', ref: '', delivery: '', deliveryTime: '', redelivery: '', redeliveryTime: '' };
+const BLANK = { vessel: '', party: '', ref: '', operator: '', delivery: '', deliveryTime: '', redelivery: '', redeliveryTime: '' };
 
 export default function ContractsPane(props: {
   state: AppState;
@@ -44,7 +44,7 @@ export default function ContractsPane(props: {
 
   function startEdit(c: Contract) {
     setEditing(c.id); setOpen(true); setMsg({ text: '' });
-    setF({ vessel: c.vessel, party: c.party, ref: c.ref || '', delivery: c.delivery || '', deliveryTime: c.deliveryTime || '', redelivery: c.redelivery || '', redeliveryTime: c.redeliveryTime || '' });
+    setF({ vessel: c.vessel, party: c.party, ref: c.ref || '', operator: c.operator || '', delivery: c.delivery || '', deliveryTime: c.deliveryTime || '', redelivery: c.redelivery || '', redeliveryTime: c.redeliveryTime || '' });
     setTimeout(function () { if (vesselRef.current) vesselRef.current.focus(); }, 0);
   }
 
@@ -54,6 +54,7 @@ export default function ContractsPane(props: {
     }
     const vals = { vessel: f.vessel.trim(), party: f.party.trim(), ref: f.ref.trim(), delivery: f.delivery, redelivery: f.redelivery };
     const times = { deliveryTime: f.deliveryTime || undefined, redeliveryTime: f.redeliveryTime || undefined };
+    const operator = f.operator.trim();
     if (editing) {
       const id = editing;
       props.change(function (d) {
@@ -62,6 +63,7 @@ export default function ContractsPane(props: {
         Object.assign(cur, vals);
         if (times.deliveryTime) cur.deliveryTime = times.deliveryTime; else delete cur.deliveryTime;
         if (times.redeliveryTime) cur.redeliveryTime = times.redeliveryTime; else delete cur.redeliveryTime;
+        if (operator) cur.operator = operator; else delete cur.operator;
       });
       setEditing(null); setF(BLANK); setMsg({ text: 'Changes saved.', good: true });
       return;
@@ -69,6 +71,7 @@ export default function ContractsPane(props: {
     const c: Contract = Object.assign({ id: uid() }, vals);
     if (times.deliveryTime) c.deliveryTime = times.deliveryTime;
     if (times.redeliveryTime) c.redeliveryTime = times.redeliveryTime;
+    if (operator) c.operator = operator;
     props.change(function (d) { d.contracts.push(c); });
     setF(BLANK);
     setMsg({ text: 'Contract saved: ' + c.vessel + ' / ' + c.party + '. You can now add its notices on the Notices tab.', good: true });
@@ -102,7 +105,10 @@ export default function ContractsPane(props: {
             <label>Vessel name<input id="c-vessel" ref={vesselRef} required maxLength={60} placeholder="e.g. MV Aurora" value={f.vessel} onChange={function (e) { set('vessel', e.target.value); }} /></label>
             <label>Counterparty<input id="c-party" required maxLength={60} placeholder="e.g. Nordic Bulk Ltd" value={f.party} onChange={function (e) { set('party', e.target.value); }} /></label>
           </div>
-          <label>Contract reference (optional)<input id="c-ref" maxLength={40} placeholder="e.g. TC-2026-014" value={f.ref} onChange={function (e) { set('ref', e.target.value); }} /></label>
+          <div className="row">
+            <label>Contract reference (optional)<input id="c-ref" maxLength={40} placeholder="e.g. TC-2026-014" value={f.ref} onChange={function (e) { set('ref', e.target.value); }} /></label>
+            <label>Operator (optional)<input id="c-operator" maxLength={60} placeholder="e.g. Maria Jensen" value={f.operator} onChange={function (e) { set('operator', e.target.value); }} /></label>
+          </div>
           <div className="row">
             <label>Delivery date<input id="c-del" type="date" required value={f.delivery} onChange={function (e) { set('delivery', e.target.value); }} /></label>
             <label>Delivery time (optional)<input id="c-del-time" type="time" value={f.deliveryTime} onChange={function (e) { set('deliveryTime', e.target.value); }} /></label>
@@ -133,6 +139,7 @@ export default function ContractsPane(props: {
             <div key={c.id} className="contract ccard">
               <strong>{c.vessel + ' / ' + c.party}</strong>
               {c.ref ? <small>{'Ref ' + c.ref}</small> : null}
+              {c.operator ? <small className="op">{'Operator: ' + c.operator}</small> : null}
               <small>{'Delivery ' + fmtWhen(c.delivery, c.deliveryTime) + ' to redelivery ' + fmtWhen(c.redelivery, c.redeliveryTime)}</small>
               {!ns.length ? <small>{countText}</small> : (
                 <details className="lineset" open={isOpen}

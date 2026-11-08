@@ -217,6 +217,7 @@ export default function NoticesPane(props: {
               })}
             </select>
           </label>
+          {(function () { const pc = byId(state, cid); return pc && pc.operator ? <small className="hint" id="n-operator">{'Operator: ' + pc.operator + ' (from the contract)'}</small> : null; })()}
           <label id="n-what-wrap" hidden={!!editing}>What is due?
             <select id="n-what" ref={whatRef} value={f.what} onChange={function (e) { applyWhat(e.target.value); }}>
               <option value="Delivery notice">Delivery notice</option>
@@ -321,6 +322,9 @@ function NoticeItem(props: { n: Notice; state: AppState; change: (fn: (d: AppSta
   const s = status(n);
   const anyTo = !n.rems || n.rems.some(function (r) { return r.to.length; });
   const cr = (!n.done && s.soon) ? currentRem(n) : null;
+  // The operator is set once on the contract and shown on each of its notices.
+  const owner = byId(props.state, n.cid);
+  const opName = owner && owner.operator ? owner.operator : '';
   return (
     <li className={'item ' + n.type + (s.soon ? ' soon' : '') + (n.done ? ' isdone' : '')}>
       {/* On/off switch: on = still to do, off = actioned (saved as done, so alerts and reminder emails stop). */}
@@ -336,6 +340,7 @@ function NoticeItem(props: { n: Notice; state: AppState; change: (fn: (d: AppSta
       <div>
         <strong>{n.title}</strong>
         <small className="st">{fmtWhen(n.date, n.time) + ' - ' + s.text}</small>
+        {opName ? <small className="op">{'Operator: ' + opName}</small> : null}
         <small>{'Reminders: ' + remindsOf(n).join(', ') + ' days before' + (anyTo ? '' : ' (no recipients)')}</small>
         {n.notes ? <small className="notes" title={n.notes}>{n.notes}</small> : null}
         {cr && cr.to.length ? (

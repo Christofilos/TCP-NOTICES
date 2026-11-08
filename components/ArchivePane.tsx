@@ -58,6 +58,7 @@ export default function ArchivePane(props: { state: AppState; hidden: boolean; c
             <div key={c.id} className="contract ccard agroup acontract">
               <strong>{c.vessel + ' / ' + c.party}</strong>
               {c.ref ? <small>{'Ref ' + c.ref}</small> : null}
+              {c.operator ? <small>{'Operator: ' + c.operator}</small> : null}
               <small>{'Delivery ' + fmt(c.delivery) + ' to redelivery ' + fmt(c.redelivery)}</small>
               <small>{ns.length + (ns.length === 1 ? ' notice' : ' notices') + (c.archivedAt ? ' · archived ' + fmt(c.archivedAt) : '')}</small>
               {ns.length ? (

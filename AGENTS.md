@@ -74,7 +74,7 @@ Stored in Redis under `tcp:state` as `{ state, rev, updatedAt }`, where `state` 
 ```js
 {
   contracts: [
-    { id, ref, vessel, party, delivery: 'YYYY-MM-DD', redelivery: 'YYYY-MM-DD',
+    { id, ref, vessel, party, operator?: 'name', delivery: 'YYYY-MM-DD', redelivery: 'YYYY-MM-DD',
       deliveryTime?: 'HH:MM', redeliveryTime?: 'HH:MM',
       archived?: true, archivedAt?: 'YYYY-MM-DD' }
   ],
@@ -95,6 +95,8 @@ Stored in Redis under `tcp:state` as `{ state, rev, updatedAt }`, where `state` 
 ```
 
 Archived notices, and every notice of an archived contract, are kept but treated as gone everywhere except the Archive tab: filter with `live(state, n)` and `liveC(c)` from `lib/rules.ts` (calendar, lists, notice form's contract list, banner, desktop alerts). `status(n)` says `Archived` for an archived notice; the Excel Status column says `Archived` for both kinds. On the server, `pickDue` skips notices that are done, archived or on an archived contract, and `cleanState` keeps `notes`, `archived` and `archivedAt`.
+
+The operator (owner's request, 2026-11-08) is set once on the contract (max 60 characters) and inherited by every notice of that contract: notices never store their own copy, they read it from the contract (`byId(state, n.cid).operator`), so changing it on the contract changes it everywhere. It is shown on the contract card, each notice, the notice form (`#n-operator`), reminder emails ("Operator" line) and the Excel file (last column of both sheets). `cleanState` keeps it.
 
 Older notices may have `remind` (one number) or `reminds` (array of numbers) instead of `rems`. `remindsOf(n)` reads all three shapes, and `cleanState` keeps them. Keep both working.
 

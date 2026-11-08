@@ -138,6 +138,7 @@ export function cleanState(raw: any): AppState | null {
     const added = contracts[contracts.length - 1];
     if (TIME_RE.test(c.deliveryTime)) added.deliveryTime = c.deliveryTime;
     if (TIME_RE.test(c.redeliveryTime)) added.redeliveryTime = c.redeliveryTime;
+    const op = str(c.operator, 60).trim(); if (op) added.operator = op;
     if (c.archived === true) { added.archived = true; if (DATE_RE.test(c.archivedAt)) added.archivedAt = c.archivedAt; }
   });
   const seenN: Record<string, boolean> = {};
@@ -219,6 +220,7 @@ export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'time' 
   const lines: [string, string][] = [
     ['Notice', n.title],
     ['Contract', c.vessel ? c.vessel + ' / ' + (c.party || '') + (c.ref ? ' (ref ' + c.ref + ')' : '') : 'Unknown contract'],
+    ...(c.operator ? [['Operator', c.operator] as [string, string]] : []),
     ['Due date', fmtDate(n.date) + (n.time ? ' at ' + n.time : '') + ' (' + when + ')'],
     ['Type', n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation'],
     ['Reminder', it.rem.days + (it.rem.days === 1 ? ' day' : ' days') + ' before the due date']

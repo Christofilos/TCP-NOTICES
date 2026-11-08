@@ -13,6 +13,7 @@ export interface Contract {
   ref: string;
   vessel: string;
   party: string;
+  operator?: string;        // optional; every notice of the contract shows it (notices never store their own copy)
   delivery: string;
   redelivery: string;
   deliveryTime?: string;    // optional 'HH:MM', shown only

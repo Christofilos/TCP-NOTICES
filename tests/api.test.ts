@@ -72,10 +72,15 @@ const PW = { 'x-app-password': 'correct horse' };
   check('archive flags and dates survive saving, junk does not', kept.contracts[0].archived === true && kept.contracts[0].archivedAt === '2026-11-07' && kept.contracts[1].archived === undefined && kept.notices[0].archived === true && kept.notices[0].archivedAt === '2026-11-07' && kept.notices[1].archived === undefined);
   check('comments survive saving, trimmed and capped at 1000', kept.notices[0].notes === 'Agreed by email' && kept.notices[1].notes.length === 1000 && kept.notices[2].notes === undefined);
 
+  const opSt = L.cleanState({ contracts: [{ id: 'o1', operator: '  Maria Ops  ' }, { id: 'o2', operator: 'x'.repeat(90) }, { id: 'o3', operator: 7 }], notices: [] }) as any;
+  check('operator survives saving, trimmed and capped at 60, junk dropped', opSt.contracts[0].operator === 'Maria Ops' && opSt.contracts[1].operator.length === 60 && opSt.contracts[2].operator === undefined);
+
   console.log('email text');
   const mail = L.buildEmail({ notice: { title: '<script>x</script>', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'MV\nTest', party: 'A&B', ref: '' }, rem: { days: 10 }, d: 10 });
   check('html escapes user text', mail.html.indexOf('<script>') < 0 && mail.html.indexOf('&lt;script&gt;') > 0 && mail.html.indexOf('A&amp;B') > 0);
   check('subject has no line breaks', mail.subject.indexOf('\n') < 0);
+  const mailOp = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'V', party: 'P', operator: 'Ann <Ops>' }, rem: { days: 3 }, d: 3 });
+  check('email names the contract operator, escaped in the HTML', /Operator: Ann <Ops>/.test(mailOp.text) && mailOp.html.indexOf('Ann &lt;Ops&gt;') > 0 && !/Operator/.test(mail.text));
   const mailN = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', type: 'shipping', notes: 'Check <b>bunkers</b>' }, contract: { vessel: 'V' }, rem: { days: 3 }, d: 3 });
   check('email includes comments, escaped in the HTML', /Comments: Check <b>bunkers<\/b>/.test(mailN.text) && mailN.html.indexOf('Check &lt;b&gt;bunkers') > 0 && mailN.html.indexOf('<b>bunkers') < 0);
   const timedMail = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', time: '14:30', type: 'shipping' }, contract: null, rem: { days: 10 }, d: 10 });

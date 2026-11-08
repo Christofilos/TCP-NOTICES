@@ -225,7 +225,7 @@ function plusDays(n: number) {
   const sheets: any = await A.evaluate(() => (window as any).__sheets);
   ok('two sheets built', sheets && Object.keys(sheets).join() === 'Contracts,Notices by contract', sheets && Object.keys(sheets).join());
   const nrows = sheets && sheets['Notices by contract'];
-  ok('every row has 18 columns, the last is Comments', nrows && nrows.every((r: any[]) => r.length === 18) && nrows[0][17] === 'Comments' && nrows[0][10] === 'Actioned');
+  ok('every row has 19 columns, ending Comments then Operator', nrows && nrows.every((r: any[]) => r.length === 19) && nrows[0][17] === 'Comments' && nrows[0][18] === 'Operator' && nrows[0][10] === 'Actioned');
   const drow = nrows && nrows.find((r: any[]) => r[5] === 'Delivery notice (10 days)');
   ok('dates are Excel date numbers', drow && drow[7].t === 'n' && drow[7].v === 46336, drow && JSON.stringify(drow[7]));
 
@@ -345,8 +345,11 @@ function plusDays(n: number) {
   const dDel = plusDays(20), dRed = plusDays(200), dHeel = plusDays(5), dOpt = plusDays(6), dHire = plusDays(4);
   await F.click('#c-sum');
   await F.fill('#c-vessel', 'MV Feature'); await F.fill('#c-party', 'Test Ltd'); await F.fill('#c-del', dDel); await F.fill('#c-red', dRed);
+  await F.fill('#c-operator', '  Maria Ops ');
   await F.click('#c-submit'); await saved(F);
   const fcid = stored().state.contracts.find((c: any) => c.vessel === 'MV Feature').id;
+  ok('operator saved on the contract, trimmed', stored().state.contracts.find((c: any) => c.id === fcid).operator === 'Maria Ops');
+  ok('contract card shows the operator', /Operator: Maria Ops/.test(await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).innerText()));
   await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).locator('button:has-text("Add notice")').click();
   await F.click('#n-submit'); await saved(F);   // Delivery notice, 10 days by default
   await F.selectOption('#n-what', 'Heel nomination'); await F.fill('#n-date', dHeel); await F.fill('#n-notes', 'Heel note\nsecond line');
@@ -364,6 +367,11 @@ function plusDays(n: number) {
   ok('comments saved', fget('Heel nomination').notes === 'Heel note\nsecond line' && fget('Option period lifting').notes === 'Declare option' && fget('Hire payment F').notes === undefined);
   ok('comment shown under the notice', /Heel note/.test(await F.locator('#nlist li').filter({ hasText: 'Heel nomination' }).locator('small.notes').innerText()));
   ok('group opens by itself after adding', await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).isVisible());
+  const fItems = F.locator('#nlist details.ngroup').filter({ hasText: 'MV Feature' }).locator('li.item');
+  ok('every notice of the contract shows its operator', (await fItems.count()) === 4 && (await fItems.locator('small.op').allInnerTexts()).every(t => t === 'Operator: Maria Ops'));
+  ok('notices do not store their own copy of the operator', stored().state.notices.filter((n: any) => n.cid === fcid).every((n: any) => n.operator === undefined));
+  ok('notice form shows the contract operator', /Operator: Maria Ops \(from the contract\)/.test(await text(F, '#n-operator')));
+  ok('notices of other contracts do not show it', (await F.locator('#nlist details.ngroup').filter({ hasNotText: 'MV Feature' }).locator('small.op').filter({ hasText: 'Maria Ops' }).count()) === 0);
 
   // calendar colours and what it leaves out
   await gotoMonth(F, fget('Delivery notice (10 days)').date);
@@ -383,7 +391,10 @@ function plusDays(n: number) {
   // double-click opens
   await chipOn(F, dDel, 'Delivery: MV Feature').dblclick();
   ok('double-click on a delivery date opens its contract', await F.isVisible('#pane-c') && (await F.inputValue('#c-vessel')) === 'MV Feature' && (await text(F, '#c-submit')) === 'Save changes');
-  await F.click('#c-cancel');
+  ok('contract form shows the operator when editing', (await F.inputValue('#c-operator')) === 'Maria Ops');
+  await F.fill('#c-operator', 'Ops Desk B'); await F.click('#c-submit'); await saved(F);
+  await F.click('#tab-n');
+  ok('changing the operator on the contract updates all its notices', (await F.locator('#nlist details.ngroup').filter({ hasText: 'MV Feature' }).locator('small.op').allInnerTexts()).every(t => t === 'Operator: Ops Desk B') && stored().state.contracts.find((c: any) => c.id === fcid).operator === 'Ops Desk B');
   await gotoMonth(F, dHeel);
   await chipOn(F, dHeel, 'Heel nomination - MV Feature').dblclick();
   ok('double-click on a notice opens it for editing', await F.isVisible('#pane-n') && (await text(F, '#n-sum')) === 'Edit notice' && (await F.inputValue('#n-title')) === 'Heel nomination' && (await F.inputValue('#n-notes')) === 'Heel note\nsecond line');
@@ -458,7 +469,9 @@ function plusDays(n: number) {
   await F.click('#xl'); await F.waitForFunction(() => /downloaded|did not load/.test(document.getElementById('xl-msg')?.textContent || ''), null, { timeout: 5000 });
   const fsheets: any = await F.evaluate(() => (window as any).__sheets);
   const optRow = fsheets['Notices by contract'].find((r: any[]) => r[0] === 'MV Feature' && r[5] === 'Option period lifting');
-  ok('Excel has the comment and the archived status', optRow && optRow[17] === 'Declare option' && optRow[9] === 'Archived', JSON.stringify(optRow && [optRow[9], optRow[17]]));
+  ok('Excel has the comment, the archived status and the operator', optRow && optRow[17] === 'Declare option' && optRow[9] === 'Archived' && optRow[18] === 'Ops Desk B', JSON.stringify(optRow && [optRow[9], optRow[17], optRow[18]]));
+  const fsum = fsheets['Contracts'].find((r: any[]) => r[0] === 'MV Feature');
+  ok('Excel contracts sheet has the operator', fsum && fsum[8] === 'Ops Desk B' && fsheets['Contracts'][0][8] === 'Operator');
 
   // delete the archived contract for good
   await F.click('#tab-a');
