@@ -1,4 +1,4 @@
-# TCP Notices
+# Notices Calendar
 
 A calendar for tracking **shipping notices** and **contract obligations** on time charter party (TCP) contracts. Add each contract once (vessel, counterparty, delivery and redelivery dates), then add the notices that belong to it. The calendar shows everything, and anything due soon is flagged.
 

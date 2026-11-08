@@ -71,6 +71,8 @@ function plusDays(n: number) {
     await p.waitForTimeout(100); // let the page show the result
   }
   const text = (p: Page, sel: string) => p.textContent(sel).then(t => t || '');
+  // Editing a contract moves the cursor to the vessel box a moment later; wait for it before typing elsewhere.
+  const waitForVessel = (p: Page) => p.waitForFunction(() => document.activeElement && document.activeElement.id === 'c-vessel', null, { timeout: 3000 }).catch(() => null);
 
   /* ---------- Signing in ---------- */
   console.log('signing in');
@@ -82,6 +84,7 @@ function plusDays(n: number) {
   await A.fill('#cl-pw', PASSWORD); await A.press('#cl-pw', 'Enter');
   await A.waitForSelector('#tab-c', { timeout: 5000 }).catch(() => null);
   ok('Enter signs in and shows the app', await A.isVisible('#tab-c'));
+  ok('the app is called Notices Calendar', (await text(A, 'h1')) === 'Notices Calendar' && (await A.title()) === 'Notices Calendar');
   ok('empty team data shows empty lists', /No contracts yet/.test(await text(A, '#list')));
   ok('no import offer when the browser has no old data', !(await A.isVisible('#import')));
   ok('password remembered on this device', await A.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.cloud.v1') || '{}').pw === 'test-pass'));
@@ -180,7 +183,7 @@ function plusDays(n: number) {
 
   // edit contract
   await A.click('#tab-c');
-  await A.click('#list .ccard button:has-text("Edit contract")');
+  await A.click('#list .ccard button:has-text("Edit contract")'); await waitForVessel(A);
   ok('contract form prefilled', (await A.inputValue('#c-vessel')) === 'MV Aurora');
   await A.fill('#c-vessel', 'MV Borealis');
   await A.fill('#c-del-time', '08:00'); await A.fill('#c-red-time', '17:30');
@@ -266,27 +269,27 @@ function plusDays(n: number) {
   const B = await device();
   await signIn(B);
   ok('second device sees the team data', (await B.locator('#list .ccard').count()) === 1 && /MV Borealis/.test(await text(B, '#list')));
-  await B.click('#list .ccard button:has-text("Edit contract")');
+  await B.click('#list .ccard button:has-text("Edit contract")'); await waitForVessel(B);
   await B.fill('#c-ref', 'FROM-B'); await B.click('#c-submit'); await saved(B);
   ok('second device saves', stored().state.contracts[0].ref === 'FROM-B', stored().state.contracts.map((c: any) => c.vessel + ':' + c.ref).join() + ' / ' + await text(B, '#save-msg') + ' / ' + await text(B, '#c-msg'));
   await A.evaluate(() => window.dispatchEvent(new Event('focus'))); await A.waitForTimeout(500);
   ok('first device picks up the change when it comes back', /Ref FROM-B/.test(await text(A, '#list')), await text(A, '#save-msg'));
 
   // conflict: B saves, then A saves from the older version
-  await B.click('#list .ccard button:has-text("Edit contract")');
+  await B.click('#list .ccard button:has-text("Edit contract")'); await waitForVessel(B);
   await B.fill('#c-ref', 'NEWER-B'); await B.click('#c-submit'); await saved(B);
   await A.click('#tab-c');
-  await A.click('#list .ccard button:has-text("Edit contract")');
+  await A.click('#list .ccard button:has-text("Edit contract")'); await waitForVessel(A);
   await A.fill('#c-ref', 'STALE-A'); await A.click('#c-submit');
   await A.waitForSelector('#conflict', { timeout: 5000 }).catch(() => null);
   ok('stale device is asked to choose, nothing overwritten', await A.isVisible('#conflict') && stored().state.contracts[0].ref === 'NEWER-B', await text(A, '#save-msg'));
   await A.click('#cf-theirs'); await A.waitForTimeout(200);
   ok('"use the saved version" shows it', /Ref NEWER-B/.test(await text(A, '#list')) && !(await A.isVisible('#conflict')));
-  await A.click('#list .ccard button:has-text("Edit contract")');
+  await A.click('#list .ccard button:has-text("Edit contract")'); await waitForVessel(A);
   await A.fill('#c-ref', 'A-AGAIN'); await A.click('#c-submit'); await saved(A);
   ok('after choosing, saving works again', stored().state.contracts[0].ref === 'A-AGAIN');
 
-  await B.click('#list .ccard button:has-text("Edit contract")');
+  await B.click('#list .ccard button:has-text("Edit contract")'); await waitForVessel(B);
   await B.fill('#c-ref', 'B-WINS'); await B.click('#c-submit');
   await B.waitForSelector('#conflict', { timeout: 5000 }).catch(() => null);
   ok('the other device also gets the choice', await B.isVisible('#conflict'));

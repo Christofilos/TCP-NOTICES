@@ -85,9 +85,9 @@ export async function testEmail(req: Request): Promise<Response> {
   }
   const r = await L.sendEmail({
     to: [to],
-    subject: 'TCP Notices test email',
-    text: 'This is a test from TCP Notices. If you can read this, Brevo is connected.',
-    html: '<p style="font-family:Arial,sans-serif">This is a test from <strong>TCP Notices</strong>. If you can read this, Brevo is connected.</p>'
+    subject: 'Notices Calendar test email',
+    text: 'This is a test from Notices Calendar. If you can read this, Brevo is connected.',
+    html: '<p style="font-family:Arial,sans-serif">This is a test from <strong>Notices Calendar</strong>. If you can read this, Brevo is connected.</p>'
   });
   if (!r.ok) return L.json(502, { error: 'send-failed', detail: r.error, status: r.status || null });
   return L.json(200, { ok: true, id: r.id });

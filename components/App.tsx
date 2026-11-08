@@ -286,7 +286,7 @@ export default function App() {
     return (
       <div className="wrap">
         <div className="panel login">
-          <h1>Deadline Calendar</h1>
+          <h1>Notices Calendar</h1>
           <p className="sub">Shipping notices and contract obligations for your time charter contracts, shared by your team.</p>
           {phase === 'starting' ? <p className="hint" role="status">Loading...</p> : (
             <form id="login" onSubmit={function (e) { e.preventDefault(); connect(pwInput || pw, false); }}>
@@ -304,7 +304,7 @@ export default function App() {
 
   return (
     <div className="wrap">
-      <h1>Deadline Calendar</h1>
+      <h1>Notices Calendar</h1>
       <p className="sub">Add a contract once, then add its shipping notices and obligations. Everything is grouped by contract, and delivery and redelivery dates show on the calendar. Changes are saved for the whole team.</p>
       <div className={'savebar' + (save.bad ? ' bad' : '')} id="save-msg" role="status">
         <span>{save.text}</span>

@@ -25,7 +25,7 @@ async function bundle(): Promise<void> {
   });
   fs.copyFileSync(path.join(ROOT, 'app', 'globals.css'), path.join(OUT, 'app.css'));
   fs.writeFileSync(path.join(OUT, 'index.html'),
-    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Deadline Calendar</title>' +
+    '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Notices Calendar</title>' +
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' +
     '<link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script src="/app.js"></script></body></html>');
 }

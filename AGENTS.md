@@ -4,7 +4,9 @@ Read this before changing anything. It tells you what the project is, how it is 
 
 ## Project in one paragraph
 
-TCP Notices tracks shipping notices and contract obligations on time charter party contracts. Contracts own notices. The calendar shows contract dates and the key notices. It is a **Next.js app (React + TypeScript) on Vercel**. All contracts and notices are stored in a Redis database (Upstash, through Vercel Storage), shared by the whole team behind one team password. A daily Vercel Cron job emails reminders through Brevo. The owner is a complete beginner at coding, so explain changes in plain language, and never leave the app in a half-working state.
+Notices Calendar (formerly TCP Notices) tracks shipping notices and contract obligations on time charter party contracts. Contracts own notices. The calendar shows contract dates and the key notices. It is a **Next.js app (React + TypeScript) on Vercel**. All contracts and notices are stored in a Redis database (Upstash, through Vercel Storage), shared by the whole team behind one team password. A daily Vercel Cron job emails reminders through Brevo. The owner is a complete beginner at coding, so explain changes in plain language, and never leave the app in a half-working state.
+
+The app was renamed from "TCP Notices" / "Deadline Calendar" to **Notices Calendar** on 2026-11-08. The storage keys deliberately keep their old names (`tcp:*` in Redis, `deadlineCalendar.*` in the browser) so existing data keeps working; do not rename them (rule 10).
 
 ## Rules that must not be broken
 

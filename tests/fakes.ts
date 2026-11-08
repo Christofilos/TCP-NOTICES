@@ -33,7 +33,7 @@ export function setTestEnv(password: string) {
   process.env.KV_REST_API_URL = 'https://fake.upstash.io';
   process.env.KV_REST_API_TOKEN = 'tok';
   process.env.BREVO_API_KEY = 'xkeysib-fake';
-  process.env.BREVO_FROM = 'TCP Notices <notices@example.com>';
+  process.env.BREVO_FROM = 'Notices Calendar <notices@example.com>';
   process.env.APP_PASSWORD = password;
   process.env.CRON_SECRET = 'cronsecret';
 }

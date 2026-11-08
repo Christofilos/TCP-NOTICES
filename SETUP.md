@@ -19,7 +19,7 @@ Project, **Settings**, **Environment Variables**. Add each one for all environme
 | Name | Value |
 |---|---|
 | `BREVO_API_KEY` | An API key from Brevo (starts with `xkeysib-`). See step 5. |
-| `BREVO_FROM` | The sender address you verified in Brevo, for example `TCP Notices <you@gmail.com>` or just `you@gmail.com` |
+| `BREVO_FROM` | The sender address you verified in Brevo, for example `Notices Calendar <you@gmail.com>` or just `you@gmail.com` |
 | `APP_PASSWORD` | A password you choose and share with your team. Make it long. |
 | `CRON_SECRET` | A long random text (30 or more letters and numbers). Nobody needs to remember it. |
 

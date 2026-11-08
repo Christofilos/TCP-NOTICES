@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Deadline Calendar',
+  title: 'Notices Calendar',
   description: 'Shipping notices and contract obligations for time charter party contracts.'
 };
 

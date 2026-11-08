@@ -226,13 +226,13 @@ export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'time' 
     ['Reminder', it.rem.days + (it.rem.days === 1 ? ' day' : ' days') + ' before the due date']
   ];
   if (n.notes) lines.push(['Comments', n.notes]);
-  const text = lines.map(function (l) { return l[0] + ': ' + l[1]; }).join('\n') + '\n\nSent automatically by TCP Notices.';
+  const text = lines.map(function (l) { return l[0] + ': ' + l[1]; }).join('\n') + '\n\nSent automatically by Notices Calendar.';
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#18242F">' +
     '<p style="margin:0 0 12px"><strong>' + esc(n.title) + '</strong> is ' + esc(when) + '.</p>' +
     '<table style="border-collapse:collapse">' + lines.map(function (l) {
       return '<tr><td style="padding:3px 14px 3px 0;color:#5C6B78">' + esc(l[0]) + '</td><td style="padding:3px 0">' + esc(l[1]) + '</td></tr>';
     }).join('') + '</table>' +
-    '<p style="margin:16px 0 0;color:#5C6B78;font-size:13px">Sent automatically by TCP Notices.</p></div>';
+    '<p style="margin:16px 0 0;color:#5C6B78;font-size:13px">Sent automatically by Notices Calendar.</p></div>';
   return { subject: subject, text: text, html: html };
 }
 

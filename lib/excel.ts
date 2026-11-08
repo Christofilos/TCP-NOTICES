@@ -76,7 +76,7 @@ export async function exportExcel(state: AppState): Promise<string> {
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'deadline-calendar-' + ymd(new Date()) + '.xlsx';
+  a.download = 'notices-calendar-' + ymd(new Date()) + '.xlsx';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
   return 'Excel file downloaded.';
