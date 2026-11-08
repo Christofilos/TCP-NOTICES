@@ -1,5 +1,7 @@
 # Notices Calendar
 
+Live at **https://notices-calendar.vercel.app** (the old address https://tcp-notices.vercel.app still works). Formerly called TCP Notices / Deadline Calendar.
+
 A calendar for tracking **shipping notices** and **contract obligations** on time charter party (TCP) contracts. Add each contract once (vessel, counterparty, delivery and redelivery dates), then add the notices that belong to it. The calendar shows everything, and anything due soon is flagged.
 
 It is a Next.js web app on Vercel. Everything is saved in one shared database, so the whole team sees the same contracts and notices on every device, and a daily job emails each reminder on the right day. Setup steps are in [`SETUP.md`](SETUP.md).
