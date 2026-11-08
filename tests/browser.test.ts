@@ -395,6 +395,11 @@ function plusDays(n: number) {
   const hire = F.locator('#nlist li').filter({ hasText: 'Hire payment F' });
   ok('switch starts on', await hire.locator('input[role=switch]').isChecked() && /On/.test(await hire.locator('.switch').innerText()));
   await hire.locator('.switch').click(); await saved(F);
+  await F.click('#tab-c');
+  const offLine = F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).locator('li.line').filter({ hasText: 'Hire payment F' });
+  const offRed = await F.evaluate(() => { const e = document.createElement('span'); e.style.color = 'var(--warn)'; document.body.appendChild(e); const c = getComputedStyle(e).color; e.remove(); return c; });
+  ok('a switched-off notice is grey and says Off under the contract', /Off/.test(await offLine.locator('.lstat').textContent() || '') && (await offLine.locator('.lstat').evaluate(e => getComputedStyle(e).color)) !== offRed);
+  await F.click('#tab-n');
   fn = stored().state.notices.filter((n: any) => n.cid === fcid);
   ok('switching off saves it as actioned', fget('Hire payment F').done === true && /Off/.test(await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).locator('.switch').innerText()) && /Actioned/.test(await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).innerText()));
   await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).locator('input[role=switch]').focus(); await F.keyboard.press('Space'); await saved(F);
@@ -408,6 +413,9 @@ function plusDays(n: number) {
   await fcard.locator('details.lineset summary').click(); await F.waitForTimeout(150);
   ok('drop-down label changes to Hide', /Hide/.test(await fcard.locator('details.lineset summary').innerText()));
   ok('opening shows the notices as lines', (await fcard.locator('li.line').count()) === 4 && await fcard.locator('li.line').first().isVisible());
+  const lineColours = await fcard.locator('li.line').evaluateAll(ls => ls.map(l => [l.querySelector('.lname')!.textContent, getComputedStyle(l.querySelector('.lstat')!).color]));
+  const red = await F.evaluate(() => { const e = document.createElement('span'); e.style.color = 'var(--warn)'; document.body.appendChild(e); const c = getComputedStyle(e).color; e.remove(); return c; });
+  ok('every active notice status is red under the contract, including heel nomination and option lifting', lineColours.length === 4 && lineColours.every(l => l[1] === red), JSON.stringify(lineColours));
   await fcard.locator('button.lname', { hasText: 'Option period lifting' }).click();
   ok('clicking a line opens that notice', await F.isVisible('#pane-n') && (await F.inputValue('#n-title')) === 'Option period lifting');
 
