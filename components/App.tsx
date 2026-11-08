@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppState } from '../lib/types';
-import { byId, remindsOf, status, todayStr, daysUntil } from '../lib/rules';
+import { byId, live, remindsOf, status, todayStr, daysUntil } from '../lib/rules';
 import {
   KEYS, api, apiProblem, importPlan, legacyData, read, rememberPassword, savedPassword, write
 } from '../lib/browser';
@@ -18,6 +18,7 @@ import Calendar from './Calendar';
 import ContractsPane from './ContractsPane';
 import NoticesPane, { type NoticeRequest } from './NoticesPane';
 import EmailPanel from './EmailPanel';
+import ArchivePane, { archiveCount } from './ArchivePane';
 import { msgClass, type Msg } from './forms';
 
 const EMPTY: AppState = { contracts: [], notices: [] };
@@ -41,10 +42,11 @@ export default function App() {
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [offerMsg, setOfferMsg] = useState<Msg>({ text: '' });
-  const [tab, setTab] = useState<'c' | 'n'>('c');
+  const [tab, setTab] = useState<'c' | 'n' | 'a'>('c');
   // seq changes on every click, so clicking the same day again still fills in the due date.
   const [pick, setPick] = useState({ date: todayStr(), seq: 0 });
   const [noticeReq, setNoticeReq] = useState<NoticeRequest | null>(null);
+  const [contractReq, setContractReq] = useState<{ cid: string; seq: number } | null>(null);
   const [notifText, setNotifText] = useState('Turn on desktop alerts');
   const [xlMsg, setXlMsg] = useState('');
 
@@ -233,7 +235,8 @@ export default function App() {
 
   /* ---------- Alerts ---------- */
 
-  const due = data.notices.filter(function (n) { return !n.done && status(n).soon; });
+  // Switched-off (done) and archived notices never alert.
+  const due = data.notices.filter(function (n) { return !n.done && live(data, n) && status(n).soon; });
 
   function notifyDue() {
     try {
@@ -258,6 +261,14 @@ export default function App() {
   useEffect(function () {
     if (phase === 'ready' && !notifiedRef.current) { notifiedRef.current = true; notifyDue(); }
   }); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Open a notice or a contract in its edit form (calendar double-click, contract lines). */
+  function openNotice(nid: string) {
+    const n = dataRef.current.notices.filter(function (x) { return x.id === nid; })[0];
+    if (!n) return;
+    setTab('n'); setNoticeReq({ kind: 'edit', cid: n.cid, nid: nid, seq: Date.now() });
+  }
+  function openContract(cid: string) { setTab('c'); setContractReq({ cid: cid, seq: Date.now() }); }
 
   function askNotify() {
     try {
@@ -338,16 +349,22 @@ export default function App() {
       ) : null}
 
       <div className="layout">
-        <Calendar state={data} selected={pick.date} onSelect={function (key) { setPick({ date: key, seq: Date.now() }); }} />
+        <Calendar state={data} selected={pick.date} onSelect={function (key) { setPick({ date: key, seq: Date.now() }); }}
+          onOpenNotice={openNotice} onOpenContract={openContract} />
         <aside className="panel">
           <div className="tabs" role="tablist">
             <button type="button" role="tab" id="tab-c" aria-selected={tab === 'c'} aria-controls="pane-c" onClick={function () { setTab('c'); }}>Contracts</button>
             <button type="button" role="tab" id="tab-n" aria-selected={tab === 'n'} aria-controls="pane-n" onClick={function () { setTab('n'); }}>Notices</button>
+            <button type="button" role="tab" id="tab-a" aria-selected={tab === 'a'} aria-controls="pane-a" onClick={function () { setTab('a'); }}>
+              Archive <span id="a-count">{archiveCount(data) ? '(' + archiveCount(data) + ')' : ''}</span>
+            </button>
           </div>
           <ContractsPane state={data} hidden={tab !== 'c'} change={change}
             onAddNotice={function (cid) { setTab('n'); setNoticeReq({ kind: 'add', cid: cid, seq: Date.now() }); }}
-            onContractAdded={function (cid) { setNoticeReq({ kind: 'select', cid: cid, seq: Date.now() }); }} />
+            onContractAdded={function (cid) { setNoticeReq({ kind: 'select', cid: cid, seq: Date.now() }); }}
+            onEditNotice={openNotice} editRequest={contractReq} />
           <NoticesPane state={data} hidden={tab !== 'n'} selected={pick.date} selectedSeq={pick.seq} change={change} request={noticeReq} />
+          <ArchivePane state={data} hidden={tab !== 'a'} change={change} />
           <button className="ghost" id="notif" type="button" style={{ marginTop: 12 }} onClick={askNotify}>{notifText}</button>
         </aside>
       </div>

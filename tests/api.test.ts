@@ -60,10 +60,24 @@ const PW = { 'x-app-password': 'correct horse' };
   check('later stage is sent again after earlier one', L.pickDue(st, '2026-11-11', { 'a:10:2026-11-14': 'x' }).filter(function (x) { return x.notice.id === 'a'; })[0].rem.days === 3);
   check('changed due date counts as new', L.pickDue(st, '2026-11-04', { 'a:10:2026-11-13': 'x' }).length === 2);
 
+  console.log('archiving, switches and comments');
+  const offSt = JSON.parse(JSON.stringify(st)); offSt.notices[0].done = true;
+  check('switched-off (done) notices are never emailed', L.pickDue(offSt, '2026-11-04', {}).map(function (x) { return x.notice.id; }).join() === 'f');
+  const archSt = JSON.parse(JSON.stringify(st)); archSt.notices[0].archived = true;
+  check('archived notices are never emailed', L.pickDue(archSt, '2026-11-04', {}).map(function (x) { return x.notice.id; }).join() === 'f');
+  const archC = JSON.parse(JSON.stringify(st)); archC.contracts[0].archived = true;
+  check('notices on an archived contract are never emailed', L.pickDue(archC, '2026-11-04', {}).length === 0);
+  const kept = L.cleanState({ contracts: [{ id: 'k', vessel: 'V', archived: true, archivedAt: '2026-11-07' }, { id: 'j', archived: 1, archivedAt: 'x' }],
+    notices: [{ id: 'z', date: '2026-11-10', archived: true, archivedAt: '2026-11-07', notes: '  Agreed by email  ' }, { id: 'y', date: '2026-11-10', archived: 'yes', notes: 'x'.repeat(1500) }, { id: 'w', date: '2026-11-10', notes: 42 }] }) as any;
+  check('archive flags and dates survive saving, junk does not', kept.contracts[0].archived === true && kept.contracts[0].archivedAt === '2026-11-07' && kept.contracts[1].archived === undefined && kept.notices[0].archived === true && kept.notices[0].archivedAt === '2026-11-07' && kept.notices[1].archived === undefined);
+  check('comments survive saving, trimmed and capped at 1000', kept.notices[0].notes === 'Agreed by email' && kept.notices[1].notes.length === 1000 && kept.notices[2].notes === undefined);
+
   console.log('email text');
   const mail = L.buildEmail({ notice: { title: '<script>x</script>', date: '2026-11-14', type: 'shipping' }, contract: { vessel: 'MV\nTest', party: 'A&B', ref: '' }, rem: { days: 10 }, d: 10 });
   check('html escapes user text', mail.html.indexOf('<script>') < 0 && mail.html.indexOf('&lt;script&gt;') > 0 && mail.html.indexOf('A&amp;B') > 0);
   check('subject has no line breaks', mail.subject.indexOf('\n') < 0);
+  const mailN = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', type: 'shipping', notes: 'Check <b>bunkers</b>' }, contract: { vessel: 'V' }, rem: { days: 3 }, d: 3 });
+  check('email includes comments, escaped in the HTML', /Comments: Check <b>bunkers<\/b>/.test(mailN.text) && mailN.html.indexOf('Check &lt;b&gt;bunkers') > 0 && mailN.html.indexOf('<b>bunkers') < 0);
   const timedMail = L.buildEmail({ notice: { title: 'T', date: '2026-11-14', time: '14:30', type: 'shipping' }, contract: null, rem: { days: 10 }, d: 10 });
   check('email shows the due time when set', /Due date: 14 Nov 2026 at 14:30/.test(timedMail.text) && !/ at /.test(mail.text.split('\n')[2]));
 

@@ -138,6 +138,7 @@ export function cleanState(raw: any): AppState | null {
     const added = contracts[contracts.length - 1];
     if (TIME_RE.test(c.deliveryTime)) added.deliveryTime = c.deliveryTime;
     if (TIME_RE.test(c.redeliveryTime)) added.redeliveryTime = c.redeliveryTime;
+    if (c.archived === true) { added.archived = true; if (DATE_RE.test(c.archivedAt)) added.archivedAt = c.archivedAt; }
   });
   const seenN: Record<string, boolean> = {};
   const notices: Notice[] = [];
@@ -149,6 +150,8 @@ export function cleanState(raw: any): AppState | null {
     seenN[id] = true;
     const out: Notice = { id: id, cid: str(n.cid, 60), title: str(n.title, 80), type: n.type === 'contract' ? 'contract' : 'shipping', date: n.date, done: !!n.done };
     if (TIME_RE.test(n.time)) out.time = n.time;
+    const notes = str(n.notes, 1000).trim(); if (notes) out.notes = notes;
+    if (n.archived === true) { out.archived = true; if (DATE_RE.test(n.archivedAt)) out.archivedAt = n.archivedAt; }
     if (Array.isArray(n.rems)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       out.rems = n.rems.slice(0, 3).map(function (r: any): Reminder {
@@ -188,7 +191,9 @@ export function pickDue(state: AppState, today: string, sentMap: Record<string, 
   const byContract: Record<string, Contract> = {};
   state.contracts.forEach(function (c) { byContract[c.id] = c; });
   state.notices.forEach(function (n) {
-    if (n.done || !n.rems || !n.rems.length) return;
+    // Switched off (done) and archived notices, and notices of archived contracts, are never emailed.
+    if (n.done || n.archived || !n.rems || !n.rems.length) return;
+    if (byContract[n.cid] && byContract[n.cid].archived) return;
     const d = daysUntil(today, n.date);
     if (d < 0) return;
     const reached = n.rems.filter(function (r) { return r.days >= d; }).sort(function (a, b) { return a.days - b.days; })[0];
@@ -207,7 +212,7 @@ function esc(s: string): string {
 }
 function oneLine(s: string): string { return String(s).replace(/[\r\n]+/g, ' ').trim(); }
 
-export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'time' | 'type'>; contract: Partial<Contract> | null; rem: { days: number }; d: number }) {
+export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'time' | 'type' | 'notes'>; contract: Partial<Contract> | null; rem: { days: number }; d: number }) {
   const n = it.notice, c = it.contract || {};
   const when = it.d === 0 ? 'due today' : it.d === 1 ? 'due tomorrow' : 'due in ' + it.d + ' days';
   const subject = oneLine('Reminder: ' + n.title + (c.vessel ? ' - ' + c.vessel : '') + ' (' + when + ')');
@@ -218,6 +223,7 @@ export function buildEmail(it: { notice: Pick<Notice, 'title' | 'date' | 'time' 
     ['Type', n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation'],
     ['Reminder', it.rem.days + (it.rem.days === 1 ? ' day' : ' days') + ' before the due date']
   ];
+  if (n.notes) lines.push(['Comments', n.notes]);
   const text = lines.map(function (l) { return l[0] + ': ' + l[1]; }).join('\n') + '\n\nSent automatically by TCP Notices.';
   const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#18242F">' +
     '<p style="margin:0 0 12px"><strong>' + esc(n.title) + '</strong> is ' + esc(when) + '.</p>' +

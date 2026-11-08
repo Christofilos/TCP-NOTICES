@@ -1,25 +1,37 @@
 'use client';
-// Month view. Teal = shipping notice, purple = contract obligation, grey = delivery or redelivery.
+/*
+ * Month view (owner's request, 2026-11-06): grey = contract delivery or redelivery date,
+ * green = delivery or redelivery notice, blue = nomination (e.g. heel nomination),
+ * orange = option lifting. Other notices, reminder dates and anything archived are left off.
+ * Double-click an entry to open it: a notice in the notice form, a date in the contract form.
+ */
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { AppState } from '../lib/types';
-import { byId, todayStr, ymd } from '../lib/rules';
+import { byId, calKind, live, liveC, todayStr, ymd } from '../lib/rules';
 
-type Ev = { cls: string; label: string; done?: boolean };
+type Ev = { cls: string; label: string; done?: boolean; nid?: string; cid?: string };
 
-function eventsOn(state: AppState, key: string): Ev[] {
+export function eventsOn(state: AppState, key: string): Ev[] {
   const out: Ev[] = [];
   state.contracts.forEach(function (c) {
-    if (c.delivery === key) out.push({ cls: 'leg', label: 'Delivery: ' + c.vessel + (c.deliveryTime ? ' ' + c.deliveryTime : '') });
-    if (c.redelivery === key) out.push({ cls: 'leg', label: 'Redelivery: ' + c.vessel + (c.redeliveryTime ? ' ' + c.redeliveryTime : '') });
+    if (!liveC(c)) return;
+    if (c.delivery === key) out.push({ cls: 'leg', label: 'Delivery: ' + c.vessel + (c.deliveryTime ? ' ' + c.deliveryTime : ''), cid: c.id });
+    if (c.redelivery === key) out.push({ cls: 'leg', label: 'Redelivery: ' + c.vessel + (c.redeliveryTime ? ' ' + c.redeliveryTime : ''), cid: c.id });
   });
   state.notices.forEach(function (n) {
-    if (n.date === key) { const c = byId(state, n.cid); out.push({ cls: n.type, label: n.title + (n.time ? ' ' + n.time : '') + (c ? ' - ' + c.vessel : ''), done: n.done }); }
+    const k = calKind(n);
+    if (n.date !== key || !k || !live(state, n)) return;
+    const c = byId(state, n.cid);
+    out.push({ cls: k, label: n.title + (n.time ? ' ' + n.time : '') + (c ? ' - ' + c.vessel : ''), done: n.done, nid: n.id });
   });
   return out;
 }
 
-export default function Calendar(props: { state: AppState; selected: string; onSelect: (key: string) => void }) {
+export default function Calendar(props: {
+  state: AppState; selected: string; onSelect: (key: string) => void;
+  onOpenNotice: (nid: string) => void; onOpenContract: (cid: string) => void;
+}) {
   const [view, setView] = useState(function () { const d = new Date(); d.setDate(1); return d; });
   const y = view.getFullYear(), m = view.getMonth();
   const offset = (new Date(y, m, 1).getDay() + 6) % 7;
@@ -41,7 +53,14 @@ export default function Calendar(props: { state: AppState; selected: string; onS
         onClick={function () { props.onSelect(key); }}>
         <span className="n">{d}</span>
         {evs.slice(0, 4).map(function (e, i) {
-          return <span key={i} className={'chip ' + e.cls + (e.done ? ' done' : '')} title={e.label}>{e.label}</span>;
+          return (
+            <span key={i} className={'chip ' + e.cls + (e.done ? ' done' : '')} title={e.label + ' (double-click to open)'}
+              data-nid={e.nid} data-cid={e.cid}
+              onDoubleClick={function (ev) {
+                ev.stopPropagation();
+                if (e.nid) props.onOpenNotice(e.nid); else if (e.cid) props.onOpenContract(e.cid);
+              }}>{e.label}</span>
+          );
         })}
         {evs.length > 4 ? <span className="more">{'+' + (evs.length - 4) + ' more'}</span> : null}
         <span className="dots">{evs.map(function (e, i) { return <span key={i} className={'dot ' + e.cls} />; })}</span>
@@ -62,10 +81,12 @@ export default function Calendar(props: { state: AppState; selected: string; onS
         {cells}
       </div>
       <div className="legend">
-        <span style={{ '--c': 'var(--ship)' } as CSSProperties}>Shipping notice</span>
-        <span style={{ '--c': 'var(--con)' } as CSSProperties}>Contract obligation</span>
-        <span style={{ '--c': 'var(--leg)' } as CSSProperties}>Delivery / redelivery</span>
+        <span style={{ '--c': 'var(--leg)' } as CSSProperties}>Delivery / redelivery date</span>
+        <span style={{ '--c': 'var(--dn)' } as CSSProperties}>Delivery / redelivery notice</span>
+        <span style={{ '--c': 'var(--hn)' } as CSSProperties}>Heel nomination</span>
+        <span style={{ '--c': 'var(--ol)' } as CSSProperties}>Option lifting</span>
       </div>
+      <p className="hint calnote">Other notices and all reminders are listed on the Notices tab. Double-click an entry to open it.</p>
     </section>
   );
 }

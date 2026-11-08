@@ -130,7 +130,7 @@ function plusDays(n: number) {
   await A.selectOption('#n-what', 'Heel nomination');
   ok('heel shows date box', await A.isVisible('#n-date'));
   ok('heel hides day picker', !(await A.isVisible('#n-days-wrap')));
-  ok('heel switches type to contract obligation', (await A.inputValue('#n-type')) === 'contract');
+  ok('there is no Type field', (await A.locator('#n-type').count()) === 0);
   const soon = plusDays(2);
   await A.fill('#n-date', soon);
   await A.fill('#n-remind', '7'); await A.fill('#n-to1', 'a@x.com, b@x.com');
@@ -203,9 +203,12 @@ function plusDays(n: number) {
   ok('contracts come back after reload', (await A.locator('#list .ccard').count()) === 2);
   ok('nothing kept in the browser as a data copy', await A.evaluate(() => localStorage.getItem('deadlineCalendar.v2') === null));
 
-  // done tick and delete
+  // on/off switch and delete (after a reload the contract groups start closed)
   await A.click('#tab-n');
-  await A.locator('#nlist li').filter({ hasText: 'Redelivery notice' }).locator('input[type=checkbox]').check(); await saved(A);
+  ok('notice groups start closed after a reload', (await A.locator('#nlist details.ngroup[open]').count()) === 0 && /Show/.test(await text(A, '#nlist details.ngroup summary')));
+  await A.locator('#nlist details.ngroup summary').first().click(); await A.waitForTimeout(150);
+  ok('opening a group shows its notices', await A.locator('#nlist li').first().isVisible() && /Hide/.test(await text(A, '#nlist details.ngroup summary')), String(await A.locator('#nlist li').first().isVisible()) + ' / ' + await text(A, '#nlist details.ngroup summary') + ' / ' + await A.locator('#nlist details.ngroup').first().evaluate(e => String((e as HTMLDetailsElement).open)));
+  await A.locator('#nlist li').filter({ hasText: 'Redelivery notice' }).locator('.switch').click(); await saved(A);
   ok('done saved', stored().state.notices.some((n: any) => n.done));
   await A.locator('#nlist li').filter({ hasText: 'Delivery notice (2 days)' }).locator('.del').click(); await saved(A);
   ok('delete notice', stored().state.notices.length === 5);
@@ -222,7 +225,7 @@ function plusDays(n: number) {
   const sheets: any = await A.evaluate(() => (window as any).__sheets);
   ok('two sheets built', sheets && Object.keys(sheets).join() === 'Contracts,Notices by contract', sheets && Object.keys(sheets).join());
   const nrows = sheets && sheets['Notices by contract'];
-  ok('every row has 17 columns', nrows && nrows.every((r: any[]) => r.length === 17));
+  ok('every row has 18 columns, the last is Comments', nrows && nrows.every((r: any[]) => r.length === 18) && nrows[0][17] === 'Comments' && nrows[0][10] === 'Actioned');
   const drow = nrows && nrows.find((r: any[]) => r[5] === 'Delivery notice (10 days)');
   ok('dates are Excel date numbers', drow && drow[7].t === 'n' && drow[7].v === 46336, drow && JSON.stringify(drow[7]));
 
@@ -230,7 +233,7 @@ function plusDays(n: number) {
   console.log('failed save');
   await A.route('**/api/state', r => r.request().method() === 'PUT' ? r.abort() : r.continue());
   await A.click('#tab-n');
-  await A.locator('#nlist li').filter({ hasText: 'Delivery notice (5 days)' }).locator('input[type=checkbox]').check();
+  await A.locator('#nlist li').filter({ hasText: 'Delivery notice (5 days)' }).locator('.switch').click();
   await A.waitForSelector('#save-retry', { timeout: 5000 }).catch(() => null);
   ok('failed save is shown with a retry button', /Not saved/.test(await text(A, '#save-msg')) && await A.isVisible('#save-retry'), await text(A, '#save-msg'));
   await A.unroute('**/api/state');
@@ -329,6 +332,133 @@ function plusDays(n: number) {
   ok('sign out shows the sign-in screen and forgets the password', await E.isVisible('#cl-pw') && await E.evaluate(() => JSON.parse(localStorage.getItem('deadlineCalendar.cloud.v1') || '{}').pw === ''));
   await E.reload(); await E.waitForSelector('#cl-pw');
   ok('still signed out after reload', await E.isVisible('#cl-pw'));
+
+  /* ---------- Features added 6-8 Nov: switch, calendar colours, drop-downs, archive, comments ---------- */
+  console.log('new features');
+  const F = await device();
+  await signIn(F);
+  async function gotoMonth(p: Page, day: string) {
+    await p.click('#today');
+    for (let i = 0; i < 14 && !(await p.locator('.cell[aria-label^="' + day + '"]').count()); i++) await p.click('#next');
+  }
+  const chipOn = (p: Page, day: string, label: string) => p.locator('.cell[aria-label^="' + day + '"] .chip').filter({ hasText: label });
+  const dDel = plusDays(20), dRed = plusDays(200), dHeel = plusDays(5), dOpt = plusDays(6), dHire = plusDays(4);
+  await F.click('#c-sum');
+  await F.fill('#c-vessel', 'MV Feature'); await F.fill('#c-party', 'Test Ltd'); await F.fill('#c-del', dDel); await F.fill('#c-red', dRed);
+  await F.click('#c-submit'); await saved(F);
+  const fcid = stored().state.contracts.find((c: any) => c.vessel === 'MV Feature').id;
+  await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).locator('button:has-text("Add notice")').click();
+  await F.click('#n-submit'); await saved(F);   // Delivery notice, 10 days by default
+  await F.selectOption('#n-what', 'Heel nomination'); await F.fill('#n-date', dHeel); await F.fill('#n-notes', 'Heel note\nsecond line');
+  await F.click('#n-submit'); await saved(F);
+  ok('comments box cleared after adding', (await F.inputValue('#n-notes')) === '');
+  await F.selectOption('#n-what', 'Option period lifting');
+  ok('option lifting asks for a date, not notice periods', await F.isVisible('#n-date') && !(await F.isVisible('#n-days-wrap')));
+  await F.fill('#n-date', dOpt); await F.fill('#n-notes', 'Declare option'); await F.click('#n-submit'); await saved(F);
+  await F.selectOption('#n-what', ''); await F.fill('#n-title', 'Hire payment F'); await F.fill('#n-date', dHire);
+  await F.click('#n-submit'); await saved(F);
+  let fn = stored().state.notices.filter((n: any) => n.cid === fcid);
+  const fget = (t: string) => fn.find((n: any) => n.title === t);
+  ok('four notices on the new contract', fn.length === 4, fn.map((n: any) => n.title).join(' | '));
+  ok('types set automatically', fget('Delivery notice (10 days)').type === 'shipping' && fget('Heel nomination').type === 'contract' && fget('Option period lifting').type === 'contract' && fget('Hire payment F').type === 'contract');
+  ok('comments saved', fget('Heel nomination').notes === 'Heel note\nsecond line' && fget('Option period lifting').notes === 'Declare option' && fget('Hire payment F').notes === undefined);
+  ok('comment shown under the notice', /Heel note/.test(await F.locator('#nlist li').filter({ hasText: 'Heel nomination' }).locator('small.notes').innerText()));
+  ok('group opens by itself after adding', await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).isVisible());
+
+  // calendar colours and what it leaves out
+  await gotoMonth(F, fget('Delivery notice (10 days)').date);
+  ok('delivery notice on the calendar in green', await chipOn(F, fget('Delivery notice (10 days)').date, 'Delivery notice (10 days) - MV Feature').getAttribute('class').then(c => /\bdn\b/.test(c || '')));
+  await gotoMonth(F, dHeel);
+  ok('heel nomination in blue', await chipOn(F, dHeel, 'Heel nomination - MV Feature').getAttribute('class').then(c => /\bhn\b/.test(c || '')));
+  await gotoMonth(F, dOpt);
+  ok('option lifting in orange', await chipOn(F, dOpt, 'Option period lifting - MV Feature').getAttribute('class').then(c => /\bol\b/.test(c || '')));
+  await gotoMonth(F, dHire);
+  ok('other notices are not on the calendar', (await chipOn(F, dHire, 'Hire payment F').count()) === 0);
+  await gotoMonth(F, dDel);
+  ok('delivery date still grey', await chipOn(F, dDel, 'Delivery: MV Feature').getAttribute('class').then(c => /\bleg\b/.test(c || '')));
+  ok('legend lists the new colours', /Delivery \/ redelivery notice[\s\S]*Heel nomination[\s\S]*Option lifting/.test(await text(F, '.legend')));
+  const legStyle = await F.evaluate(() => ['--dn', '--hn', '--ol'].map(n => getComputedStyle(document.documentElement).getPropertyValue(n).trim()));
+  ok('the three colours are set and different', legStyle.every(x => x) && new Set(legStyle).size === 3, legStyle.join(' '));
+
+  // double-click opens
+  await chipOn(F, dDel, 'Delivery: MV Feature').dblclick();
+  ok('double-click on a delivery date opens its contract', await F.isVisible('#pane-c') && (await F.inputValue('#c-vessel')) === 'MV Feature' && (await text(F, '#c-submit')) === 'Save changes');
+  await F.click('#c-cancel');
+  await gotoMonth(F, dHeel);
+  await chipOn(F, dHeel, 'Heel nomination - MV Feature').dblclick();
+  ok('double-click on a notice opens it for editing', await F.isVisible('#pane-n') && (await text(F, '#n-sum')) === 'Edit notice' && (await F.inputValue('#n-title')) === 'Heel nomination' && (await F.inputValue('#n-notes')) === 'Heel note\nsecond line');
+  await F.fill('#n-notes', '   '); await F.click('#n-submit'); await saved(F);
+  fn = stored().state.notices.filter((n: any) => n.cid === fcid);
+  ok('emptying the comment removes it, type kept on edit', fget('Heel nomination').notes === undefined && fget('Heel nomination').type === 'contract');
+
+  // on/off switch
+  const hire = F.locator('#nlist li').filter({ hasText: 'Hire payment F' });
+  ok('switch starts on', await hire.locator('input[role=switch]').isChecked() && /On/.test(await hire.locator('.switch').innerText()));
+  await hire.locator('.switch').click(); await saved(F);
+  fn = stored().state.notices.filter((n: any) => n.cid === fcid);
+  ok('switching off saves it as actioned', fget('Hire payment F').done === true && /Off/.test(await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).locator('.switch').innerText()) && /Actioned/.test(await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).innerText()));
+  await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).locator('input[role=switch]').focus(); await F.keyboard.press('Space'); await saved(F);
+  fn = stored().state.notices.filter((n: any) => n.cid === fcid);
+  ok('switch works from the keyboard and turns back on', fget('Hire payment F').done === false);
+
+  // contracts tab: notices as a drop-down of lines
+  await F.click('#tab-c');
+  const fcard = F.locator('#list .ccard').filter({ hasText: 'MV Feature' });
+  ok('notice lines start closed', !(await fcard.locator('details.lineset').evaluate(e => (e as HTMLDetailsElement).open)) && /4 notices/.test(await fcard.locator('details.lineset summary').innerText()));
+  await fcard.locator('details.lineset summary').click(); await F.waitForTimeout(150);
+  ok('drop-down label changes to Hide', /Hide/.test(await fcard.locator('details.lineset summary').innerText()));
+  ok('opening shows the notices as lines', (await fcard.locator('li.line').count()) === 4 && await fcard.locator('li.line').first().isVisible());
+  await fcard.locator('button.lname', { hasText: 'Option period lifting' }).click();
+  ok('clicking a line opens that notice', await F.isVisible('#pane-n') && (await F.inputValue('#n-title')) === 'Option period lifting');
+
+  // archive a notice from the edit form
+  ok('archive button shown only while editing', await F.isVisible('#n-archive'));
+  await F.click('#n-archive'); await saved(F);
+  fn = stored().state.notices.filter((n: any) => n.cid === fcid);
+  ok('archiving saves the flag and date', fget('Option period lifting').archived === true && /^\d{4}-\d{2}-\d{2}$/.test(fget('Option period lifting').archivedAt));
+  ok('archived notice leaves the list and the form closes', (await F.locator('#nlist li').filter({ hasText: 'Option period lifting' }).count()) === 0 && (await text(F, '#n-sum')) === 'Add a notice' && !(await F.isVisible('#n-archive')));
+  await gotoMonth(F, dOpt);
+  ok('archived notice leaves the calendar', (await chipOn(F, dOpt, 'Option period lifting - MV Feature').count()) === 0);
+  ok('archive tab shows a count', /\(1\)/.test(await text(F, '#tab-a')), await text(F, '#tab-a'));
+  await F.click('#tab-c');
+  ok('contract card counts the archived notice', /3 notices.*\(1 archived\)/.test(await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).innerText()));
+  await F.click('#tab-a');
+  ok('archive tab lists the notice', /Option period lifting/.test(await text(F, '#alist')));
+  await F.locator('#alist button', { hasText: 'Restore' }).click(); await saved(F);
+  fn = stored().state.notices.filter((n: any) => n.cid === fcid);
+  ok('restore brings it back', !fget('Option period lifting').archived && /Restored/.test(await text(F, '#a-msg')) && /Nothing archived/.test(await text(F, '#alist')));
+
+  // archive the whole contract
+  await F.click('#tab-c');
+  await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).locator('button:has-text("Archive contract")').click(); await saved(F);
+  ok('archiving a contract saves the flag', stored().state.contracts.find((c: any) => c.id === fcid).archived === true);
+  ok('archived contract leaves the Contracts tab', (await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).count()) === 0 && /Archived MV Feature/.test(await text(F, '#c-msg')));
+  ok('its notices leave the Notices tab', (await F.locator('#nlist li').filter({ hasText: 'Hire payment F' }).count()) === 0);
+  ok('it is not offered when adding a notice', !(await F.evaluate((id: string) => Array.from(document.querySelectorAll('#n-contract option')).some(o => (o as HTMLOptionElement).value === id), fcid)));
+  await gotoMonth(F, dDel);
+  ok('its dates leave the calendar', (await chipOn(F, dDel, 'MV Feature').count()) === 0);
+  ok('its notices are not in the alert banner', !/MV Feature/.test(await F.locator('#banner').count() ? await text(F, '#banner') : ''));
+  await F.click('#tab-a');
+  const acard = F.locator('#alist .acontract').filter({ hasText: 'MV Feature' });
+  ok('archive tab lists the contract with its notices', (await acard.count()) === 1 && (await acard.locator('li.line').count()) === 4);
+  await acard.locator('button:has-text("Restore contract")').click(); await saved(F);
+  ok('restore contract brings it back', !stored().state.contracts.find((c: any) => c.id === fcid).archived && (await F.locator('#alist .acontract').count()) === 0);
+
+  // Excel keeps comments and archived status
+  await F.click('#tab-c');
+  await F.locator('#list .ccard').filter({ hasText: 'MV Feature' }).locator('button:has-text("Archive contract")').click(); await saved(F);
+  await F.click('#xl'); await F.waitForFunction(() => /downloaded|did not load/.test(document.getElementById('xl-msg')?.textContent || ''), null, { timeout: 5000 });
+  const fsheets: any = await F.evaluate(() => (window as any).__sheets);
+  const optRow = fsheets['Notices by contract'].find((r: any[]) => r[0] === 'MV Feature' && r[5] === 'Option period lifting');
+  ok('Excel has the comment and the archived status', optRow && optRow[17] === 'Declare option' && optRow[9] === 'Archived', JSON.stringify(optRow && [optRow[9], optRow[17]]));
+
+  // delete the archived contract for good
+  await F.click('#tab-a');
+  const del = F.locator('#alist .acontract').filter({ hasText: 'MV Feature' }).locator('button.danger');
+  await del.click();
+  ok('deleting an archived contract asks for a second click', /Click again/.test(await del.innerText()) && !!stored().state.contracts.find((c: any) => c.id === fcid));
+  await del.click(); await saved(F);
+  ok('second click deletes the contract and its notices', !stored().state.contracts.find((c: any) => c.id === fcid) && !stored().state.notices.some((n: any) => n.cid === fcid));
 
   /* ---------- Phone width ---------- */
   console.log('phone');

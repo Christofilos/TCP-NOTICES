@@ -5,6 +5,7 @@
   --bg:#EEF2F5; --panel:#FFFFFF; --ink:#18242F; --muted:#5C6B78; --line:#D3DCE3;
   --ship:#0E7C86; --ship-bg:#DCF1F2; --con:#7B3F9E; --con-bg:#EBDDF4;
   --leg:#3C4F5E; --leg-bg:#E1E7EC;
+  --dn:#1E7B34; --dn-bg:#DDF2E2; --hn:#1F5FBF; --hn-bg:#DFE9FA; --ol:#A04B06; --ol-bg:#FCE8D6;
   --warn:#B3261E; --warn-bg:#FBE3E0; --today:#18242F;
   color-scheme:light;
 }
@@ -13,6 +14,7 @@
     --bg:#0F1920; --panel:#17252F; --ink:#E7EEF3; --muted:#9AAAB6; --line:#2B3C48;
     --ship:#5FD0D9; --ship-bg:#12383C; --con:#CFA2EC; --con-bg:#332241;
     --leg:#B9C7D2; --leg-bg:#26363F;
+    --dn:#7FD993; --dn-bg:#173A22; --hn:#8FB7FF; --hn-bg:#1A2D4D; --ol:#FFB27A; --ol-bg:#4A2A12;
     --warn:#FF9A91; --warn-bg:#4A1F1C; --today:#E7EEF3; color-scheme:dark;
   }
 }
@@ -58,7 +60,7 @@ label[hidden],small[hidden]{display:none}
 .head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .head h2{flex:1;margin:0;font-size:1.15rem}
 button{font:inherit;color:inherit;cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ship);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--ship);outline-offset:2px}
 .nav{background:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px}
 .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .dow{font-size:.75rem;color:var(--muted);text-align:center;padding:4px 0}
@@ -71,17 +73,22 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .chip.shipping{background:var(--ship-bg);color:var(--ship)}
 .chip.contract{background:var(--con-bg);color:var(--con)}
 .chip.leg{background:var(--leg-bg);color:var(--leg);font-weight:600}
+.chip.dn{background:var(--dn-bg);color:var(--dn)}
+.chip.hn{background:var(--hn-bg);color:var(--hn)}
+.chip.ol{background:var(--ol-bg);color:var(--ol)}
+.chip[data-nid],.chip[data-cid]{cursor:pointer}
 .chip.done{text-decoration:line-through;opacity:.6}
 .more{font-size:.68rem;color:var(--muted)}
 .dots{display:none;gap:3px;flex-wrap:wrap}
 .dot{width:8px;height:8px;border-radius:50%}
 .dot.shipping{background:var(--ship)}.dot.contract{background:var(--con)}.dot.leg{background:var(--leg)}
+.dot.dn{background:var(--dn)}.dot.hn{background:var(--hn)}.dot.ol{background:var(--ol)}
 @media (max-width:520px){.cell{min-height:58px}.chip,.more{display:none}.dots{display:flex}}
 .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.8rem;color:var(--muted)}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--c)}
 form{display:grid;gap:10px}
 label{display:grid;gap:4px;font-size:.85rem;font-weight:600}
-input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;min-width:0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .remrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:10px}
 .item a{font-size:.8rem;font-weight:600;color:var(--ship)}
@@ -120,3 +127,53 @@ ul.list{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
 .offer p{margin:4px 0 8px}
 .offer .actions{flex-wrap:wrap}
 button:disabled{opacity:.55;cursor:default}
+/* Added when porting the 6-8 Nov features */
+.calnote{margin:6px 0 0;font-size:.8rem}
+/* on/off switch: on = still to do, off = actioned */
+.switch{display:grid;justify-items:center;gap:2px;cursor:pointer;position:relative;font-weight:400}
+.switch input{position:absolute;opacity:0;width:38px;height:22px;margin:0;padding:0;cursor:pointer}
+.switch .track{width:38px;height:22px;border-radius:11px;background:var(--line);position:relative;transition:background .15s}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s}
+.switch input:checked + .track{background:var(--ink)}
+.switch input:checked + .track::after{transform:translateX(16px)}
+.switch input:focus-visible + .track{outline:2px solid var(--ink);outline-offset:2px}
+.switch .swtxt{font-size:.7rem;color:var(--muted);font-weight:600}
+.item.isdone{border-left-color:var(--line)}
+.item.isdone small{opacity:.7}
+.item small.notes{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;font-style:italic;border-left:2px solid var(--line);padding-left:6px;margin-top:2px;overflow-wrap:anywhere}
+.notesfield textarea{width:100%;resize:vertical;display:block}
+.notesfield .opt{font-weight:400;color:var(--muted)}
+/* notice line items in a drop-down on each contract card */
+.lineset{margin-top:2px}
+.lineset>summary,.ngroup>summary{list-style:none}
+.lineset>summary::-webkit-details-marker,.ngroup>summary::-webkit-details-marker{display:none}
+.lineset>summary{cursor:pointer;display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);padding:4px 0;border-radius:4px}
+.lineset>summary::before,.ngroup>summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.lineset[open]>summary::before,.ngroup[open]>summary::before{transform:rotate(45deg)}
+.ddhint{margin-left:auto;font-weight:600;font-size:.8rem;color:var(--ink)}
+.lineset .alert{color:var(--warn);font-weight:600}
+ul.lines{list-style:none;margin:6px 0 0;padding:0;border-top:1px solid var(--line)}
+.line{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:baseline;padding:5px 0 5px 9px;border-bottom:1px solid var(--line);border-left:3px solid var(--line);font-size:.85rem}
+.line.l-ship{border-left-color:var(--ship)}.line.l-con{border-left-color:var(--con)}
+.line .lname{grid-row:1/3;background:none;border:none;padding:0;text-align:left;font:inherit;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+button.lname{cursor:pointer}
+button.lname:hover{text-decoration:underline}
+.line .ldate{white-space:nowrap;color:var(--muted);text-align:right}
+.line .lstat{white-space:nowrap;color:var(--muted);font-size:.78rem;text-align:right}
+.line.soon .lstat{color:var(--warn);font-weight:600}
+.line.isdone .lname{text-decoration:line-through;opacity:.6}
+.line.isdone .ldate,.line.isdone .lstat{opacity:.7}
+/* notices tab: each contract is a drop-down */
+.ngroup>summary{display:flex;align-items:center;gap:10px}
+.ngroup>summary .gtext{display:grid;gap:2px;min-width:0}
+/* archive tab */
+#tab-a span{font-weight:400}
+.ahead{font-size:.95rem;margin:14px 0 8px}
+.agroup ul.lines{margin-top:6px}
+.acontract .actions{margin-top:8px}
+.aline{align-items:center}
+.aline .ainfo{display:grid;gap:1px;min-width:0}
+.aline .ainfo .lname{font-weight:600;overflow-wrap:anywhere}
+.aline .btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.aline .btns button{background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:.8rem}
+.aline .btns .danger.armed{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}

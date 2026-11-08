@@ -3,7 +3,7 @@
  * Same two sheets and columns as before: "Contracts" and "Notices by contract".
  */
 import type { AppState } from './types';
-import { daysUntil, remindsOf, sortedContracts, status, ymd } from './rules';
+import { daysUntil, live, remindsOf, sortedContracts, status, ymd } from './rules';
 
 type Cell = string | number | { t: 'n'; v: number; z: string };
 
@@ -15,22 +15,24 @@ function xlDate(s: string): Cell {
 
 export function buildSheets(state: AppState): { sum: Cell[][]; rows: Cell[][] } {
   const sum: Cell[][] = [['Vessel', 'Counterparty', 'Contract reference', 'Delivery date', 'Redelivery date', 'Notices', 'Open notices', 'Needing attention']];
-  const rows: Cell[][] = [['Vessel', 'Counterparty', 'Contract reference', 'Delivery date', 'Redelivery date', 'Notice', 'Type', 'Due date', 'Days until due', 'Status', 'Done',
-    '1st reminder (days before)', '1st reminder sent to', '2nd reminder (days before)', '2nd reminder sent to', '3rd reminder (days before)', '3rd reminder sent to']];
+  const rows: Cell[][] = [['Vessel', 'Counterparty', 'Contract reference', 'Delivery date', 'Redelivery date', 'Notice', 'Type', 'Due date', 'Days until due', 'Status', 'Actioned',
+    '1st reminder (days before)', '1st reminder sent to', '2nd reminder (days before)', '2nd reminder sent to', '3rd reminder (days before)', '3rd reminder sent to', 'Comments']];
   sortedContracts(state).forEach(function (c) {
     const ns = state.notices.filter(function (n) { return n.cid === c.id; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
-    const open = ns.filter(function (n) { return !n.done; }).length;
-    const attn = ns.filter(function (n) { return !n.done && status(n).soon; }).length;
+    const open = ns.filter(function (n) { return !n.done && live(state, n); }).length;
+    const attn = ns.filter(function (n) { return !n.done && live(state, n) && status(n).soon; }).length;
     sum.push([c.vessel, c.party, c.ref || '', xlDate(c.delivery), xlDate(c.redelivery), ns.length, open, attn]);
     const head: Cell[] = [c.vessel, c.party, c.ref || '', xlDate(c.delivery), xlDate(c.redelivery)];
-    if (!ns.length) { rows.push(head.concat(['(no notices)', '', '', '', '', '', '', '', '', '', '', ''])); return; }
+    if (!ns.length) { rows.push(head.concat(['(no notices)', '', '', '', '', '', '', '', '', '', '', '', ''])); return; }
     ns.forEach(function (n) {
-      const r: Cell[] = [n.title, n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation', xlDate(n.date), daysUntil(n.date), status(n).text, n.done ? 'Yes' : 'No'];
+      // Archived notices, and notices of archived contracts, stay in the file with the status "Archived".
+      const r: Cell[] = [n.title, n.type === 'shipping' ? 'Shipping notice' : 'Contract obligation', xlDate(n.date), daysUntil(n.date), live(state, n) ? status(n).text : 'Archived', n.done ? 'Yes' : 'No'];
       const days = remindsOf(n);
       for (let i = 0; i < 3; i++) {
         const to = (n.rems && n.rems[i]) ? n.rems[i].to : [];
         r.push(days[i] === undefined ? '' : days[i], to.join(', '));
       }
+      r.push(n.notes || '');
       rows.push(head.concat(r));
     });
   });
@@ -66,7 +68,7 @@ export async function exportExcel(state: AppState): Promise<string> {
   const w1 = XLSX.utils.aoa_to_sheet(s.sum);
   w1['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 9 }, { wch: 13 }, { wch: 17 }];
   const w2 = XLSX.utils.aoa_to_sheet(s.rows);
-  w2['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 7 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }];
+  w2['!cols'] = [{ wch: 22 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 7 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 14 }, { wch: 34 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, w1, 'Contracts');
   XLSX.utils.book_append_sheet(wb, w2, 'Notices by contract');
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

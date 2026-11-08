@@ -3,28 +3,29 @@
 // the notices grouped by contract. Lists are deliberately compact.
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { AppState, Notice, NoticeType, Reminder } from '../lib/types';
+import type { AppState, Notice, Reminder } from '../lib/types';
 import {
-  DAY_CHOICES, MAIL_RE, PRESETS, byId, currentRem, dueFor, fmtWhen, mailtoFor, outlookWebFor,
-  remindsOf, sortedContracts, status, uid
+  DAY_CHOICES, MAIL_RE, PRESETS, byId, currentRem, dueFor, fmtWhen, live, liveC, mailtoFor, outlookWebFor,
+  remindsOf, sortedContracts, status, todayStr, typeFor, uid
 } from '../lib/rules';
 import { enterPresses, msgClass, runIfValid, type Msg } from './forms';
 
 type Fields = {
-  what: string; title: string; days: number[]; type: NoticeType; date: string; time: string;
+  what: string; title: string; days: number[]; date: string; time: string; notes: string;
   r1: string; r2: string; r3: string; to1: string; to2: string; to3: string;
 };
 
 function defaults(date: string): Fields {
-  return { what: 'Delivery notice', title: '', days: [PRESETS['Delivery notice'].days], type: 'shipping', date: date,
-    time: '',
+  return { what: 'Delivery notice', title: '', days: [PRESETS['Delivery notice'].days], date: date,
+    time: '', notes: '',
     r1: '7', r2: '3', r3: '1', to1: '', to2: '', to3: '' };
 }
 function wholeNumbersOnly(e: KeyboardEvent<HTMLInputElement>) {
   if (['e', 'E', '+', '-', '.', ','].indexOf(e.key) !== -1) e.preventDefault();
 }
 
-export type NoticeRequest = { kind: 'add' | 'select'; cid: string; seq: number };
+// 'edit' opens a notice in the form (from the calendar or a line on the Contracts tab).
+export type NoticeRequest = { kind: 'add' | 'select' | 'edit'; cid: string; nid?: string; seq: number };
 
 export default function NoticesPane(props: {
   state: AppState;
@@ -41,13 +42,15 @@ export default function NoticesPane(props: {
   const [open, setOpen] = useState(function () { return !state.notices.length; });
   const [daysOpen, setDaysOpen] = useState(false);
   const [msg, setMsg] = useState<Msg>({ text: '' });
-  const [closed, setClosed] = useState<Record<string, boolean>>({});
+  // Each contract's notices are a drop-down, closed until opened. Adding or editing opens it.
+  const [openN, setOpenN] = useState<Record<string, boolean>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const whatRef = useRef<HTMLSelectElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
-  const cid = byId(state, cidPick) ? cidPick : (state.contracts[0] ? state.contracts[0].id : '');
+  const liveContracts = state.contracts.filter(liveC);
+  const cid = liveC(byId(state, cidPick)) ? cidPick : (liveContracts[0] ? liveContracts[0].id : '');
   const preset = PRESETS[f.what];
   const ticked = f.days.slice().sort(function (a, b) { return b - a; });
 
@@ -60,24 +63,30 @@ export default function NoticesPane(props: {
   useEffect(function () {
     const r = props.request;
     if (!r) return;
+    if (r.kind === 'edit') {
+      const n = state.notices.filter(function (x) { return x.id === r.nid; })[0];
+      if (n && live(state, n)) startEdit(n);
+      return;
+    }
     setCidPick(r.cid);
     if (r.kind === 'add') {
       setOpen(true);
       setTimeout(function () { if (whatRef.current) whatRef.current.focus(); }, 0);
     }
-  }, [props.request]);
+  }, [props.request]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Stop editing if the notice disappears (deleted here or on another device).
+  // Stop editing if the notice disappears or is archived (here or on another device).
   useEffect(function () {
-    if (editing && !state.notices.some(function (x) { return x.id === editing; })) endEdit();
+    if (editing && !state.notices.some(function (x) { return x.id === editing && live(state, x); })) endEdit();
   });
+
+  function openGroup(id: string) { setOpenN(function (o) { return Object.assign({}, o, { [id]: true }); }); }
 
   function applyWhat(what: string) {
     setF(function (o) {
       const p = PRESETS[what];
       const n = Object.assign({}, o, { what: what });
-      if (what === 'Heel nomination') n.type = 'contract';
-      if (p) { n.days = [p.days]; n.type = p.type; }
+      if (p) n.days = [p.days];
       return n;
     });
   }
@@ -95,7 +104,7 @@ export default function NoticesPane(props: {
   }
 
   function startEdit(n: Notice) {
-    setEditing(n.id); setOpen(true); setMsg({ text: '' }); setCidPick(n.cid);
+    setEditing(n.id); setOpen(true); setMsg({ text: '' }); setCidPick(n.cid); openGroup(n.cid);
     const days = remindsOf(n);
     const pair = function (i: number): [string, string] {
       const r = n.rems && n.rems[i];
@@ -103,7 +112,7 @@ export default function NoticesPane(props: {
       return [n.rems ? '' : (days[i] === undefined ? '' : String(days[i])), ''];
     };
     const p1 = pair(0), p2 = pair(1), p3 = pair(2);
-    setF({ what: '', title: n.title, days: [], type: n.type, date: n.date, time: n.time || '', r1: p1[0], to1: p1[1], r2: p2[0], to2: p2[1], r3: p3[0], to3: p3[1] });
+    setF({ what: '', title: n.title, days: [], date: n.date, time: n.time || '', notes: n.notes || '', r1: p1[0], to1: p1[1], r2: p2[0], to2: p2[1], r3: p3[0], to3: p3[1] });
     setTimeout(function () { if (titleRef.current) titleRef.current.focus(); }, 0);
   }
 
@@ -125,16 +134,20 @@ export default function NoticesPane(props: {
     if (!cid) return;
     setMsg({ text: '' });
     const rems = readRems(); if (!rems) return;
+    const notes = f.notes.trim().slice(0, 1000);
     if (editing) {
       const title = f.title.trim();
       if (!title || !f.date) { setMsg({ text: 'Enter a name and a due date.' }); return; }
       const id = editing;
       props.change(function (d) {
         const cur = d.notices.filter(function (x) { return x.id === id; })[0];
-        if (cur) { cur.cid = cid; cur.title = title; cur.type = f.type; cur.date = f.date; cur.rems = rems; delete cur.remind; delete cur.reminds;
+        // Editing keeps the notice's type (there is no Type field).
+        if (cur) { cur.cid = cid; cur.title = title; cur.date = f.date; cur.rems = rems; delete cur.remind; delete cur.reminds;
           if (f.time) cur.time = f.time; else delete cur.time;
+          if (notes) cur.notes = notes; else delete cur.notes;
         }
       });
+      openGroup(cid);
       setEditing(null); setF(defaults(props.selected)); setMsg({ text: 'Changes saved.', good: true });
       return;
     }
@@ -152,17 +165,29 @@ export default function NoticesPane(props: {
     let skipped = 0;
     const fresh: Notice[] = [];
     toAdd.forEach(function (t, i) {
-      const dup = state.notices.some(function (x) { return x.cid === cid && x.title === t.title && x.date === t.date; });
+      const dup = state.notices.some(function (x) { return live(state, x) && x.cid === cid && x.title === t.title && x.date === t.date; });
       if (dup) { skipped++; return; }
-      const notice: Notice = { id: uid() + '-' + i, cid: cid, title: t.title, type: f.type, date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false };
+      const notice: Notice = { id: uid() + '-' + i, cid: cid, title: t.title, type: typeFor(f.what), date: t.date, rems: JSON.parse(JSON.stringify(rems)), done: false };
       if (t.time) notice.time = t.time;
+      if (notes) notice.notes = notes;
       fresh.push(notice);
     });
     if (fresh.length) props.change(function (d) { d.notices = d.notices.concat(fresh); });
     const added = fresh.length;
     if (skipped) setMsg({ text: skipped + (skipped === 1 ? ' notice was' : ' notices were') + ' already on this contract, so not added again.' + (added ? ' ' + added + ' added.' : '') });
     else setMsg({ text: added + (added === 1 ? ' notice added.' : ' notices added.'), good: true });
-    set('title', '');
+    set('title', ''); set('notes', '');
+    openGroup(cid);
+  }
+
+  /* Archive the notice being edited. Restore or delete it on the Archive tab. */
+  function archive() {
+    const id = editing; if (!id) return;
+    const n = state.notices.filter(function (x) { return x.id === id; })[0];
+    const day = todayStr();
+    props.change(function (d) { d.notices.forEach(function (x) { if (x.id === id) { x.archived = true; x.archivedAt = day; } }); });
+    setEditing(null); setF(defaults(props.selected));
+    setMsg({ text: 'Archived "' + (n ? n.title : 'notice') + '". You can find it on the Archive tab.', good: true });
   }
 
   let hint = '';
@@ -186,8 +211,8 @@ export default function NoticesPane(props: {
         <form id="nform" ref={formRef} onSubmit={function (e) { e.preventDefault(); }} onKeyDown={enterPresses(saveRef)}>
           <label>Contract
             <select id="n-contract" required value={cid} onChange={function (e) { setCidPick(e.target.value); }}>
-              {!state.contracts.length ? <option value="">Add a contract first</option> : null}
-              {state.contracts.map(function (c) {
+              {!liveContracts.length ? <option value="">Add a contract first</option> : null}
+              {liveContracts.map(function (c) {
                 return <option key={c.id} value={c.id}>{c.vessel + ' / ' + c.party + (c.ref ? ' (' + c.ref + ')' : '')}</option>;
               })}
             </select>
@@ -197,6 +222,7 @@ export default function NoticesPane(props: {
               <option value="Delivery notice">Delivery notice</option>
               <option value="Redelivery notice">Redelivery notice</option>
               <option value="Heel nomination">Heel nomination</option>
+              <option value="Option period lifting">Option period lifting</option>
               <option value="">Other (type your own)</option>
             </select>
           </label>
@@ -222,12 +248,6 @@ export default function NoticesPane(props: {
             </details>
           </div>
           <div className="row">
-            <label>Type
-              <select id="n-type" value={f.type} onChange={function (e) { set('type', e.target.value as NoticeType); }}>
-                <option value="shipping">Shipping notice</option>
-                <option value="contract">Contract obligation</option>
-              </select>
-            </label>
             <label id="n-date-wrap" hidden={!!preset}>Due date
               <input id="n-date" type="date" required={!preset} value={f.date} onChange={function (e) { set('date', e.target.value); }} />
             </label>
@@ -252,28 +272,36 @@ export default function NoticesPane(props: {
             );
           })}
           <small className="hint">Whole days before the due date. Separate several email addresses with commas. Leave a reminder empty if you don&apos;t need it.</small>
-          <button className="primary" type="button" id="n-submit" ref={saveRef} disabled={!state.contracts.length}
+          <label className="notesfield"><span>Comments <span className="opt">(optional)</span></span>
+            <textarea id="n-notes" rows={3} maxLength={1000} placeholder="e.g. Agreed with charterers by email on 3 Nov"
+              value={f.notes} onChange={function (e) { set('notes', e.target.value); }} />
+          </label>
+          <button className="primary" type="button" id="n-submit" ref={saveRef} disabled={!liveContracts.length}
             onClick={function () { runIfValid(formRef, submit, function (t) { setMsg({ text: t }); }); }}>
             {editing ? 'Save changes' : 'Add notice'}
           </button>
           <button className="ghost" type="button" id="n-cancel" hidden={!editing} onClick={endEdit}>Cancel editing</button>
+          <button className="ghost" type="button" id="n-archive" hidden={!editing} onClick={archive}>Archive notice</button>
           <small className={msgClass(msg)} id="n-msg" role="alert">{msg.text}</small>
         </form>
       </details>
       <h3>Your notices, by contract</h3>
       <div id="nlist">
-        {!state.notices.length ? <p className="empty">No notices yet. Use the form above to add one.</p> : null}
-        {sortedContracts(state).map(function (c) {
-          const ns = state.notices.filter(function (n) { return n.cid === c.id; })
+        {!state.notices.filter(function (n) { return live(state, n); }).length ? <p className="empty">{state.notices.length ? 'No active notices. Archived notices are on the Archive tab.' : 'No notices yet. Use the form above to add one.'}</p> : null}
+        {sortedContracts(state).filter(liveC).map(function (c) {
+          const ns = state.notices.filter(function (n) { return n.cid === c.id && live(state, n); })
             .sort(function (a, b) { return (Number(a.done) - Number(b.done)) || a.date.localeCompare(b.date); });
           if (!ns.length) return null;
           const attn = ns.filter(function (n) { return status(n).soon; }).length;
           return (
-            <details key={c.id} className="contract" open={!closed[c.id]}
-              onToggle={function (e) { const isOpen = (e.currentTarget as HTMLDetailsElement).open; setClosed(function (o) { return Object.assign({}, o, { [c.id]: !isOpen }); }); }}>
+            <details key={c.id} className="contract ngroup" open={!!openN[c.id]}
+              onToggle={function (e) { const isOpen = (e.currentTarget as HTMLDetailsElement).open; setOpenN(function (o) { return Object.assign({}, o, { [c.id]: isOpen }); }); }}>
               <summary>
-                <strong>{c.vessel + ' / ' + c.party}</strong>
-                <small className={attn ? 'alert' : undefined}>{ns.length + (ns.length === 1 ? ' notice' : ' notices') + (attn ? ', ' + attn + ' need attention' : '')}</small>
+                <span className="gtext">
+                  <strong>{c.vessel + ' / ' + c.party}</strong>
+                  <small className={attn ? 'alert' : undefined}>{ns.length + (ns.length === 1 ? ' notice' : ' notices') + (attn ? ', ' + attn + ' need attention' : '')}</small>
+                </span>
+                <span className="ddhint">{openN[c.id] ? 'Hide' : 'Show'}</span>
               </summary>
               <div className="cbody">
                 <ul className="list">
@@ -295,15 +323,21 @@ function NoticeItem(props: { n: Notice; state: AppState; change: (fn: (d: AppSta
   const cr = (!n.done && s.soon) ? currentRem(n) : null;
   return (
     <li className={'item ' + n.type + (s.soon ? ' soon' : '') + (n.done ? ' isdone' : '')}>
-      <input type="checkbox" checked={!!n.done} aria-label="Mark done"
-        onChange={function (e) {
-          const on = e.target.checked;
-          props.change(function (d) { d.notices.forEach(function (x) { if (x.id === n.id) x.done = on; }); });
-        }} />
+      {/* On/off switch: on = still to do, off = actioned (saved as done, so alerts and reminder emails stop). */}
+      <label className="switch">
+        <input type="checkbox" role="switch" checked={!n.done} aria-label={'Active: ' + n.title}
+          onChange={function (e) {
+            const done = !e.target.checked;
+            props.change(function (d) { d.notices.forEach(function (x) { if (x.id === n.id) x.done = done; }); });
+          }} />
+        <span className="track" aria-hidden="true" />
+        <span className="swtxt">{n.done ? 'Off' : 'On'}</span>
+      </label>
       <div>
         <strong>{n.title}</strong>
         <small className="st">{fmtWhen(n.date, n.time) + ' - ' + s.text}</small>
         <small>{'Reminders: ' + remindsOf(n).join(', ') + ' days before' + (anyTo ? '' : ' (no recipients)')}</small>
+        {n.notes ? <small className="notes" title={n.notes}>{n.notes}</small> : null}
         {cr && cr.to.length ? (
           <small>Email: <a href={outlookWebFor(props.state, n, cr)} target="_blank" rel="noopener noreferrer">Outlook web</a>
             {' | '}<a href={mailtoFor(props.state, n, cr)}>Outlook app</a></small>

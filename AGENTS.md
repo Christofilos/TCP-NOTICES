@@ -4,7 +4,7 @@ Read this before changing anything. It tells you what the project is, how it is 
 
 ## Project in one paragraph
 
-TCP Notices tracks shipping notices and contract obligations on time charter party contracts. Contracts own notices. The calendar shows both. It is a **Next.js app (React + TypeScript) on Vercel**. All contracts and notices are stored in a Redis database (Upstash, through Vercel Storage), shared by the whole team behind one team password. A daily Vercel Cron job emails reminders through Brevo. The owner is a complete beginner at coding, so explain changes in plain language, and never leave the app in a half-working state.
+TCP Notices tracks shipping notices and contract obligations on time charter party contracts. Contracts own notices. The calendar shows contract dates and the key notices. It is a **Next.js app (React + TypeScript) on Vercel**. All contracts and notices are stored in a Redis database (Upstash, through Vercel Storage), shared by the whole team behind one team password. A daily Vercel Cron job emails reminders through Brevo. The owner is a complete beginner at coding, so explain changes in plain language, and never leave the app in a half-working state.
 
 ## Rules that must not be broken
 
@@ -31,7 +31,8 @@ components/
   App.tsx                   Sign-in, loading, saving, conflicts, import offer, banner, layout
   Calendar.tsx              Month view
   ContractsPane.tsx         Contracts tab (form and cards)
-  NoticesPane.tsx           Notices tab ("What is due?", reminders, list by contract)
+  NoticesPane.tsx           Notices tab ("What is due?", reminders, comments, list by contract)
+  ArchivePane.tsx           Archive tab (archived contracts and notices: restore, delete for good)
   EmailPanel.tsx            Test email, preview, send now, sent list, sign out
   forms.ts                  runIfValid, enterPresses
 lib/
@@ -74,7 +75,8 @@ Stored in Redis under `tcp:state` as `{ state, rev, updatedAt }`, where `state` 
 {
   contracts: [
     { id, ref, vessel, party, delivery: 'YYYY-MM-DD', redelivery: 'YYYY-MM-DD',
-      deliveryTime?: 'HH:MM', redeliveryTime?: 'HH:MM' }
+      deliveryTime?: 'HH:MM', redeliveryTime?: 'HH:MM',
+      archived?: true, archivedAt?: 'YYYY-MM-DD' }
   ],
   notices: [
     {
@@ -84,11 +86,15 @@ Stored in Redis under `tcp:state` as `{ state, rev, updatedAt }`, where `state` 
       date: 'YYYY-MM-DD',           // due date
       time?: 'HH:MM',               // optional, shown only
       rems: [ { days: 7, to: ['a@x.com'] }, ... ],   // up to 3 reminders, largest days first
-      done: false
+      done: false,                  // the on/off switch shows this the other way round (off = done = actioned)
+      notes?: 'free text',          // optional comments, max 1000 characters; removed when empty
+      archived?: true, archivedAt?: 'YYYY-MM-DD'
     }
   ]
 }
 ```
+
+Archived notices, and every notice of an archived contract, are kept but treated as gone everywhere except the Archive tab: filter with `live(state, n)` and `liveC(c)` from `lib/rules.ts` (calendar, lists, notice form's contract list, banner, desktop alerts). `status(n)` says `Archived` for an archived notice; the Excel Status column says `Archived` for both kinds. On the server, `pickDue` skips notices that are done, archived or on an archived contract, and `cleanState` keeps `notes`, `archived` and `archivedAt`.
 
 Older notices may have `remind` (one number) or `reminds` (array of numbers) instead of `rems`. `remindsOf(n)` reads all three shapes, and `cleanState` keeps them. Keep both working.
 
@@ -108,7 +114,11 @@ Browser keys (`localStorage`):
 
 ## Look and feel
 
-Teal means shipping notice, purple means contract obligation, grey means delivery or redelivery. Notice lists are deliberately compact (name, date and status, one reminders line, email links only when due). The HTML element ids from the old page (`c-vessel`, `n-what`, `cl-msg` and so on) were kept on purpose; the tests use them.
+In the notice lists, teal means shipping notice and purple means contract obligation. On the calendar (owner's request, 2026-11-06, `calKind` and `eventsOn`): grey is a contract delivery or redelivery date, green a delivery or redelivery notice (title starts "Delivery notice"/"Redelivery notice"), blue a nomination (title contains "nomination"), orange an option lifting (title contains "option"). Other notices and reminder dates are deliberately left off. All four have light and dark tokens (`--leg`, `--dn`, `--hn`, `--ol` and their `-bg`) that must stay in sync. Double-clicking a calendar entry opens it (`onOpenNotice`/`onOpenContract` in `App.tsx`).
+
+There is no Type field in the notice form (owner's request, 2026-11-08): new notices get their type from "What is due?" via `typeFor()` (delivery and redelivery notices are `shipping`; heel nomination, option period lifting and Other are `contract`), and editing keeps the existing type. "Option period lifting" takes a typed date; it is not calculated from the contract because its period is a contract term we must not invent (rule 8).
+
+Notice lists are deliberately compact (on/off switch, name, date and status, one reminders line, comments clamped to three lines, email links only when due). The switch track uses a neutral colour, not teal or purple. On the Notices tab each contract is a `details.contract.ngroup` drop-down, closed by default; `openN` keeps it open across redraws (not reloads) and adding or editing opens it, so tests must open a group before clicking inside it. On the Contracts tab each card has a `details.lineset` drop-down of `li.line` rows (classes `l-ship`/`l-con`, not `shipping`/`contract`, which style other things); clicking a name opens the notice. The Archive notice button shows only while editing a notice; Archive contract is on each card. The HTML element ids from the old page (`c-vessel`, `n-what`, `cl-msg` and so on) were kept on purpose; the tests use them.
 
 ## Testing
 

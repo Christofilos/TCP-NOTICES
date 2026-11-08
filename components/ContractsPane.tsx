@@ -2,7 +2,7 @@
 // Contracts tab: the add/edit form and the list of contract cards.
 import { useEffect, useRef, useState } from 'react';
 import type { AppState, Contract } from '../lib/types';
-import { byId, fmtWhen, sortedContracts, status, uid } from '../lib/rules';
+import { byId, fmt, fmtWhen, live, liveC, sortedContracts, status, todayStr, uid } from '../lib/rules';
 import { enterPresses, msgClass, runIfValid, type Msg } from './forms';
 
 const BLANK = { vessel: '', party: '', ref: '', delivery: '', deliveryTime: '', redelivery: '', redeliveryTime: '' };
@@ -13,6 +13,8 @@ export default function ContractsPane(props: {
   change: (fn: (d: AppState) => void) => void;
   onAddNotice: (cid: string) => void;     // "Add notice" on a card
   onContractAdded: (cid: string) => void; // pre-select the new contract on the Notices tab
+  onEditNotice: (nid: string) => void;     // click a notice line to edit it on the Notices tab
+  editRequest: { cid: string; seq: number } | null; // double-click a contract date on the calendar
 }) {
   const { state } = props;
   const [f, setF] = useState(BLANK);
@@ -20,12 +22,21 @@ export default function ContractsPane(props: {
   const [open, setOpen] = useState(function () { return !state.contracts.length; });
   const [msg, setMsg] = useState<Msg>({ text: '' });
   const [armed, setArmed] = useState<string | null>(null);
+  const [linesOpen, setLinesOpen] = useState<Record<string, boolean>>({});
   const formRef = useRef<HTMLFormElement>(null);
   const saveRef = useRef<HTMLButtonElement>(null);
   const vesselRef = useRef<HTMLInputElement>(null);
 
-  // Stop editing if the contract disappears (deleted here or on another device).
-  useEffect(function () { if (editing && !byId(state, editing)) endEdit(); });
+  // Stop editing if the contract disappears or is archived (here or on another device).
+  useEffect(function () { if (editing && !liveC(byId(state, editing))) endEdit(); });
+
+  // Double-click on a delivery or redelivery date in the calendar opens the contract.
+  useEffect(function () {
+    const r = props.editRequest;
+    if (!r) return;
+    const c = byId(state, r.cid);
+    if (c && liveC(c)) startEdit(c);
+  }, [props.editRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function set(k: keyof typeof BLANK, v: string) { setF(function (o) { return Object.assign({}, o, { [k]: v }); }); }
 
@@ -73,6 +84,15 @@ export default function ContractsPane(props: {
     setArmed(null);
   }
 
+  /* Archive the contract with all its notices. Restore or delete it on the Archive tab. */
+  function archive(c: Contract) {
+    if (editing === c.id) endEdit();
+    const day = todayStr();
+    props.change(function (d) { const cur = byId(d, c.id); if (cur) { cur.archived = true; cur.archivedAt = day; } });
+    setArmed(null);
+    setMsg({ text: 'Archived ' + c.vessel + ' / ' + c.party + ' and its notices. You can find them on the Archive tab.', good: true });
+  }
+
   return (
     <div id="pane-c" role="tabpanel" aria-labelledby="tab-c" hidden={props.hidden}>
       <details className="block" id="cdetails" open={open} onToggle={function (e) { setOpen((e.currentTarget as HTMLDetailsElement).open); }}>
@@ -101,19 +121,45 @@ export default function ContractsPane(props: {
       </details>
       <h3>Your contracts</h3>
       <div id="list">
-        {!state.contracts.length ? <p className="empty">No contracts yet. Fill in the form above to add one.</p> : null}
-        {sortedContracts(state).map(function (c) {
-          const ns = state.notices.filter(function (n) { return n.cid === c.id; });
+        {!state.contracts.filter(liveC).length ? <p className="empty">{state.contracts.length ? 'All contracts are archived. You can restore them on the Archive tab.' : 'No contracts yet. Fill in the form above to add one.'}</p> : null}
+        {sortedContracts(state).filter(liveC).map(function (c) {
+          const ns = state.notices.filter(function (n) { return n.cid === c.id && live(state, n); });
+          const nArch = state.notices.filter(function (n) { return n.cid === c.id && n.archived; }).length;
           const attn = ns.filter(function (n) { return !n.done && status(n).soon; }).length;
+          const countText = ns.length + (ns.length === 1 ? ' notice' : ' notices') + (attn ? ', ' + attn + ' need attention' : '') + (nArch ? ' (' + nArch + ' archived)' : '');
+          const isOpen = !!linesOpen[c.id];
+          const lines = ns.slice().sort(function (a, b) { return (Number(a.done) - Number(b.done)) || a.date.localeCompare(b.date); });
           return (
             <div key={c.id} className="contract ccard">
               <strong>{c.vessel + ' / ' + c.party}</strong>
               {c.ref ? <small>{'Ref ' + c.ref}</small> : null}
               <small>{'Delivery ' + fmtWhen(c.delivery, c.deliveryTime) + ' to redelivery ' + fmtWhen(c.redelivery, c.redeliveryTime)}</small>
-              <small className={attn ? 'alert' : undefined}>{ns.length + (ns.length === 1 ? ' notice' : ' notices') + (attn ? ', ' + attn + ' need attention' : '')}</small>
+              {!ns.length ? <small>{countText}</small> : (
+                <details className="lineset" open={isOpen}
+                  onToggle={function (e) { const o = (e.currentTarget as HTMLDetailsElement).open; setLinesOpen(function (x) { return Object.assign({}, x, { [c.id]: o }); }); }}>
+                  <summary>
+                    <span className={attn ? 'alert' : undefined}>{countText}</span>
+                    <span className="ddhint">{isOpen ? 'Hide' : 'Show'}</span>
+                  </summary>
+                  <ul className="lines" aria-label={'Notices for ' + c.vessel}>
+                    {lines.map(function (n) {
+                      const s = status(n);
+                      return (
+                        <li key={n.id} className={'line ' + (n.type === 'shipping' ? 'l-ship' : 'l-con') + (n.done ? ' isdone' : '') + (!n.done && s.soon ? ' soon' : '')}>
+                          <button type="button" className="lname" title="Edit this notice" aria-label={'Edit notice: ' + n.title}
+                            onClick={function () { props.onEditNotice(n.id); }}>{n.title}</button>
+                          <span className="ldate">{fmt(n.date)}</span>
+                          <span className="lstat">{n.done ? 'Off' : s.text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
+              )}
               <div className="actions">
                 <button type="button" onClick={function () { props.onAddNotice(c.id); }}>Add notice</button>
                 <button type="button" onClick={function () { startEdit(c); }}>Edit contract</button>
+                <button type="button" aria-label={'Archive contract ' + c.vessel + ' / ' + c.party} onClick={function () { archive(c); }}>Archive contract</button>
                 <button type="button" className={'danger' + (armed === c.id ? ' armed' : '')} onClick={function () { remove(c); }}>
                   {armed === c.id ? 'Click again to delete' : 'Delete contract'}
                 </button>

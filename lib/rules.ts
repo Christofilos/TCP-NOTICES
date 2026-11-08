@@ -32,6 +32,14 @@ export function uid(): string { return String(Date.now()) + Math.random().toStri
 export function byId(state: AppState, id: string): Contract | undefined {
   return state.contracts.filter(function (c) { return c.id === id; })[0];
 }
+/* Archived contracts, and every notice of an archived contract, only appear on the Archive tab. */
+export function liveC(c: Contract | undefined): boolean { return !!c && !c.archived; }
+export function live(state: AppState, n: Notice): boolean {
+  if (n.archived) return false;
+  const c = byId(state, n.cid);
+  return !(c && c.archived);
+}
+
 export function sortedContracts(state: AppState): Contract[] {
   return state.contracts.slice().sort(function (a, b) { return (a.delivery || '').localeCompare(b.delivery || ''); });
 }
@@ -52,7 +60,8 @@ export function currentRem(n: Notice): Reminder | null {
 
 /* A notice is "soon" if overdue or due within its largest reminder window. */
 export function status(n: Notice): { soon: boolean; text: string } {
-  if (n.done) return { soon: false, text: 'Done' };
+  if (n.archived) return { soon: false, text: 'Archived' };
+  if (n.done) return { soon: false, text: 'Actioned (switched off)' };
   const d = daysUntil(n.date);
   if (d < 0) return { soon: true, text: 'Overdue by ' + (-d) + (d === -1 ? ' day' : ' days') };
   if (d === 0) return { soon: true, text: 'Due today' };
@@ -69,6 +78,24 @@ export const PRESETS: Record<string, Preset> = {
   'Delivery notice': { anchor: 'delivery', days: 10, type: 'shipping' },
   'Redelivery notice': { anchor: 'redelivery', days: 30, type: 'shipping' }
 };
+/* There is no Type field: delivery and redelivery notices are shipping notices, everything else a contract obligation. */
+export function typeFor(what: string): 'shipping' | 'contract' {
+  return PRESETS[what] ? PRESETS[what].type : 'contract';
+}
+
+/*
+ * What the calendar shows (owner's request): contract dates (grey), delivery and redelivery
+ * notices (green), nominations (blue) and option liftings (orange). Other notices and reminder
+ * dates are left off the calendar. Returns null for a notice that is not shown.
+ */
+export function calKind(n: Notice): 'dn' | 'hn' | 'ol' | null {
+  const t = n.title || '';
+  if (/^(re)?delivery notice/i.test(t)) return 'dn';
+  if (/nomination/i.test(t)) return 'hn';
+  if (/option/i.test(t)) return 'ol';
+  return null;
+}
+
 export const DAY_CHOICES: number[] = (function () {
   const list: number[] = [];
   for (let i = 1; i <= 30; i++) list.push(i);

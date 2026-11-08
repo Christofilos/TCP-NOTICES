@@ -7,16 +7,17 @@ It is a Next.js web app on Vercel. Everything is saved in one shared database, s
 ## What it does
 
 - **Team password.** One shared password opens the app. Each device remembers it until you press *Sign out on this device*.
-- **Contracts tab.** Add a contract with vessel name, counterparty, optional contract reference, delivery date and redelivery date. Edit or delete it later.
-- **Notices tab.** Notices are grouped by contract. Each notice has a name, a type (shipping notice or contract obligation), a due date, a done tick, and up to three reminders.
-- **Standard notices.** *Delivery notice* and *Redelivery notice* work out their due date from the contract. Tick one or more notice periods (1 to 30 days, then 35, 40, 45, 50, 55, 60, 75, 90, 120, 150 and 180) and one notice is created per tick. *Heel nomination* and *Other* take a date you type.
+- **Contracts tab.** Add a contract with vessel name, counterparty, optional contract reference, delivery date and redelivery date. Edit, archive or delete it later. Each contract has a drop-down (closed to start with) listing its notices as lines with due date and status; click a notice's name to edit it.
+- **Notices tab.** Notices are grouped by contract; each contract is a drop-down, closed to start with, that opens by itself after you add or edit one of its notices. Each notice has a name, a due date, an on/off switch, up to three reminders and optional comments. Switch a notice off once you have actioned it: it stops alerting and gets no more reminder emails. Its type is set automatically: delivery and redelivery notices are shipping notices (teal), everything else is a contract obligation (purple). Comments show under the notice (up to three lines), go into the Excel file and are included in reminder emails.
+- **Archive tab.** Press *Archive contract* on a contract card to put away the contract with all its notices, or open a notice with *Edit* and press *Archive notice*. Archived items leave the calendar, the lists, the alerts and the reminder emails. The Archive tab lists them, where you can *Restore* them or *Delete* them for good (delete asks for a second click).
+- **Standard notices.** *Delivery notice* and *Redelivery notice* work out their due date from the contract. Tick one or more notice periods (1 to 30 days, then 35, 40, 45, 50, 55, 60, 75, 90, 120, 150 and 180) and one notice is created per tick. *Heel nomination*, *Option period lifting* and *Other* take a date you type.
 - **Three reminders per notice.** Each reminder has its own number of days before the due date and its own list of email recipients.
-- **Calendar.** Month view showing notices (teal for shipping, purple for contract obligations) and each contract's delivery and redelivery dates (grey). Click a day to use it as the due date.
+- **Calendar.** Month view showing each contract's delivery and redelivery dates (grey), delivery and redelivery notices (green), heel nominations (blue) and option period liftings (orange). Other notices and reminder dates are listed on the Notices tab only. Click a day to use it as the due date. Double-click an entry to open it for editing (on a computer; phones show coloured dots).
 - **Alerts.** A red banner lists notices that are inside their reminder window or overdue. Optional desktop notifications work while the page is open.
 - **Email.** The server emails each reminder to its recipients about 08:00 UK time on the right day. A notice that needs attention also gets *Outlook web* and *Outlook app* links that open a ready-written email.
 - **Saving.** Every change is saved straight away for the whole team. If two people change things at the same moment, the second one is asked which version to keep.
 - **Importing from the old version.** If a browser still holds data from the old single-page version, the app offers to add it to the team data. Nothing already saved is changed, and the old copy in the browser is left in place.
-- **Excel export.** One button downloads an `.xlsx` with a *Contracts* sheet and a *Notices by contract* sheet.
+- **Excel export.** One button downloads an `.xlsx` with a *Contracts* sheet and a *Notices by contract* sheet (archived items included with the status "Archived", comments in the last column).
 
 The notice periods offered are placeholders chosen from general market practice. They are not taken from any real contract. Check them against your own charter parties.
 
